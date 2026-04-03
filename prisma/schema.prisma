@@ -32,6 +32,18 @@ enum TransactionStatus {
   FAILED
 }
 
+enum IntaSendTxType {
+  DEPOSIT
+  WITHDRAWAL
+}
+
+enum BetStatus {
+  ACTIVE
+  WON
+  LOST
+  REFUNDED
+}
+
 enum TransactionType {
   VERIFY
   DEPOSIT
@@ -107,6 +119,8 @@ model User {
   paymentProfile        PaymentProfile?
   wallet                Wallet?
   mpesaTransactions     MpesaTransaction[]
+  intaSendTransactions  IntaSendTransaction[]
+  betParticipants       BetParticipant[]
   ledgerEntries         LedgerEntry[]
   createdChallenges     Challenge[]            @relation("ChallengeCreator")
   refereedChallenges    Challenge[]            @relation("ChallengeReferee")
@@ -362,6 +376,51 @@ model EscrowLock {
 
   @@index([challengeId])
   @@index([userId])
+  @@index([status])
+}
+
+// ──────────────────────────────────────────────
+// INTASEND PAYMENT MODELS
+// ──────────────────────────────────────────────
+
+/// IntaSend payment transaction log. Tracks deposits and withdrawals.
+model IntaSendTransaction {
+  id          String            @id @default(uuid())
+  userId      String
+  apiRef      String            @unique // our UUID sent as api_ref to IntaSend
+  invoiceId   String?           // IntaSend's own invoice ID
+  type        IntaSendTxType
+  amountCents Int               // Amount in KES cents
+  status      TransactionStatus @default(PENDING)
+  phone       String
+  rawWebhook  Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([apiRef])
+  @@index([status])
+}
+
+/// Tracks each user's bet on a market. Linked to an EscrowLock.
+model BetParticipant {
+  id           String    @id @default(uuid())
+  userId       String
+  marketId     String    // market ID from markets.json
+  escrowLockId String    @unique
+  outcome      String    // e.g. "YES", "NO", candidate name
+  stakeKES     Int       // whole KES staked
+  payoutKES    Int?      // filled after resolution
+  status       BetStatus @default(ACTIVE)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([marketId])
   @@index([status])
 }
 

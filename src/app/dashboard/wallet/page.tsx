@@ -1,69 +1,179 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Sparkline } from "@/components/ui/sparkline";
 import { useToast } from "@/components/ui/toast";
 
-/* ── Mock data ── */
-const balanceHistory = [2500, 3100, 2800, 4200, 3900, 5250, 4250];
+// ── Types ──────────────────────────────────────
+interface WalletData {
+  balanceCents: number;
+  balanceKES: number;
+  phone: string | null;
+  isVerified: boolean;
+  transactions: {
+    id: string;
+    type: "DEPOSIT" | "WITHDRAWAL";
+    amountCents: number;
+    status: "PENDING" | "SUCCESS" | "FAILED";
+    createdAt: string;
+  }[];
+}
 
-const txns = [
-  { desc: "Paystack Deposit", amt: "+1,000", date: "Mar 11", ref: "PS_7F2GHSL", type: "deposit" },
-  { desc: "Won: No sugar challenge", amt: "+2,000", date: "Mar 10", ref: "WN_82KSLP3", type: "win" },
-  { desc: "Staked: Arsenal vs City", amt: "-500", date: "Mar 10", ref: "SK_19VMRT4", type: "stake" },
-  { desc: "Bank Withdrawal", amt: "-3,000", date: "Mar 8", ref: "WD_55BNCX1", type: "withdraw" },
-  { desc: "Paystack Deposit", amt: "+5,000", date: "Mar 5", ref: "PS_3A9JHRD", type: "deposit" },
-  { desc: "Won: Morning run streak", amt: "+4,200", date: "Mar 3", ref: "WN_KL29SOM", type: "win" },
-  { desc: "Staked: Ruto prediction", amt: "-1,000", date: "Mar 1", ref: "SK_MMN41PQ", type: "stake" },
-];
+type TabType = "deposit" | "withdraw";
+type Step = "form" | "pending" | "success" | "failed";
 
-const typeColors: Record<string, string> = {
-  deposit: "text-fg",
-  win: "text-green",
-  stake: "text-red",
-  withdraw: "text-fg-muted",
-};
+const QUICK_AMOUNTS = ["500", "1000", "2000", "5000"];
 
-const typeIcons: Record<string, string> = {
-  deposit: "M12 4.5v15m7.5-7.5h-15",
-  win: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
-  stake: "M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75z",
-  withdraw: "M4.5 12h15m0 0l-6.75-6.75M19.5 12l-6.75 6.75",
-};
+// ── Status badge ───────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    SUCCESS: "text-green bg-green/10 border-green/20",
+    PENDING: "text-amber bg-amber/10 border-amber/20",
+    FAILED: "text-red bg-red/10 border-red/20",
+  };
+  return (
+    <span className={`text-[10px] font-mono px-1.5 py-0.5 border rounded uppercase ${map[status] ?? "text-fg-muted"}`}>
+      {status}
+    </span>
+  );
+}
 
+// ── Main Page ──────────────────────────────────
 export default function WalletPage() {
-  const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
+  const [tab, setTab] = useState<TabType>("deposit");
   const [amount, setAmount] = useState("");
+  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<Step>("form");
+  const [walletData, setWalletData] = useState<WalletData | null>(null);
+  const [loading, setLoading] = useState(true);
   const [txnFilter, setTxnFilter] = useState<"all" | "in" | "out">("all");
-  const [processing, setProcessing] = useState(false);
   const { toast } = useToast();
 
-  const filteredTxns = txns.filter((t) => {
-    if (txnFilter === "all") return true;
-    if (txnFilter === "in") return t.amt.startsWith("+");
-    return t.amt.startsWith("-");
-  });
+  // ── Fetch wallet data ──────────────────────────
+  const fetchWallet = useCallback(async () => {
+    try {
+      const res = await fetch("/api/payments/wallet");
+      if (!res.ok) throw new Error("Failed to fetch wallet");
+      const data = await res.json();
+      setWalletData(data);
+      if (data.phone) setPhone(data.phone);
+    } catch {
+      toast("error", "Could not load wallet", "Please refresh the page.");
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
 
-  const handleTransaction = () => {
-    if (!amount || Number(amount) < 100) {
-      toast("error", "Invalid amount", "Minimum amount is 100 KES");
+  useEffect(() => { fetchWallet(); }, [fetchWallet]);
+
+  // ── Handle deposit ─────────────────────────────
+  const handleDeposit = async () => {
+    const amt = Number(amount);
+    if (!amt || amt < 10) { toast("error", "Invalid amount", "Minimum deposit is KES 10."); return; }
+    if (!phone) { toast("error", "Phone required", "Enter your M-Pesa number."); return; }
+
+    setStep("pending");
+
+    try {
+      const res = await fetch("/api/payments/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountKES: amt, phone }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        toast("error", "Deposit failed", data.error ?? "Please try again.");
+        setStep("form");
+        return;
+      }
+
+      // Show pending — user must approve on phone
+      // Poll for status every 5s for up to 2 min
+      toast("success", "M-Pesa prompt sent!", "Check your phone and enter your PIN.");
+      pollForConfirmation(data.apiRef);
+    } catch {
+      toast("error", "Network error", "Please try again.");
+      setStep("form");
+    }
+  };
+
+  // ── Handle withdrawal ──────────────────────────
+  const handleWithdraw = async () => {
+    const amt = Number(amount);
+    if (!amt || amt < 10) { toast("error", "Invalid amount", "Minimum withdrawal is KES 10."); return; }
+    if (!walletData || amt > walletData.balanceKES) {
+      toast("error", "Insufficient balance", `You have KES ${walletData?.balanceKES ?? 0} available.`);
       return;
     }
-    setProcessing(true);
-    setTimeout(() => {
-      setProcessing(false);
-      if (tab === "deposit") {
-        toast("success", "Deposit initiated!", `${Number(amount).toLocaleString()} KES via Paystack`);
-      } else {
-        toast("success", "Withdrawal processing", `${Number(amount).toLocaleString()} KES to your bank account`);
+    if (!phone) { toast("error", "Phone required", "Enter your M-Pesa number."); return; }
+
+    setStep("pending");
+
+    try {
+      const res = await fetch("/api/payments/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountKES: amt, phone }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        toast("error", "Withdrawal failed", data.error ?? "Please try again.");
+        setStep("form");
+        return;
       }
-      setAmount("");
-    }, 1500);
+
+      setStep("success");
+      toast("success", "Withdrawal initiated!", `KES ${amt} is being sent to ${phone}.`);
+      setTimeout(() => { setStep("form"); setAmount(""); fetchWallet(); }, 4000);
+    } catch {
+      toast("error", "Network error", "Please try again.");
+      setStep("form");
+    }
   };
+
+  // ── Poll webhook confirmation ──────────────────
+  const pollForConfirmation = (apiRef: string) => {
+    let attempts = 0;
+    const maxAttempts = 24; // 2 minutes at 5s intervals
+
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch(`/api/payments/wallet`);
+        const data: WalletData = await res.json();
+        const txn = data.transactions.find((t) => t.status === "SUCCESS" || t.status === "FAILED");
+
+        if (txn?.status === "SUCCESS") {
+          clearInterval(interval);
+          setWalletData(data);
+          setStep("success");
+          toast("success", "Payment confirmed! 🎉", `KES ${amount} added to your wallet.`);
+          setTimeout(() => { setStep("form"); setAmount(""); }, 4000);
+        } else if (txn?.status === "FAILED" || attempts >= maxAttempts) {
+          clearInterval(interval);
+          setStep("failed");
+          toast("error", "Payment not confirmed", "Please check your M-Pesa messages and try again.");
+        }
+      } catch { /* keep polling */ }
+    }, 5000);
+  };
+
+  // ── Derived ────────────────────────────────────
+  const filteredTxns = (walletData?.transactions ?? []).filter((t) => {
+    if (txnFilter === "in") return t.type === "DEPOSIT";
+    if (txnFilter === "out") return t.type === "WITHDRAWAL";
+    return true;
+  });
+
+  const balanceKES = walletData?.balanceKES ?? 0;
+  const fakeHistory = [balanceKES * 0.6, balanceKES * 0.7, balanceKES * 0.65, balanceKES * 0.8, balanceKES * 0.9, balanceKES * 0.95, balanceKES];
 
   return (
     <div className="max-w-5xl space-y-6">
+
       {/* ── Balance overview ── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -77,40 +187,43 @@ export default function WalletPage() {
             Available Balance
           </span>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-[36px] font-mono font-bold tabular-nums leading-none">
-              4,250
-            </span>
-            <span className="text-[16px] font-mono text-fg-muted">KES</span>
+            {loading ? (
+              <div className="h-9 w-32 bg-bg-above animate-pulse rounded" />
+            ) : (
+              <>
+                <span className="text-[36px] font-mono font-bold tabular-nums leading-none">
+                  {balanceKES.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-[16px] font-mono text-fg-muted">KES</span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[12px] font-mono text-green font-medium">+12.4%</span>
-            <span className="text-[11px] font-mono text-fg-muted">vs last week</span>
+            <span className="text-[12px] font-mono text-fg-muted">Real M-Pesa balance</span>
           </div>
         </div>
 
-        {/* In Escrow */}
+        {/* In Escrow — placeholder, wired later */}
         <div className="bg-bg p-5">
           <span className="text-[12px] font-mono text-fg-muted uppercase tracking-wider">
             In Escrow
           </span>
           <div className="flex items-baseline gap-1.5 mt-2">
-            <span className="text-[36px] font-mono font-bold tabular-nums text-amber leading-none">
-              2,000
-            </span>
+            <span className="text-[36px] font-mono font-bold tabular-nums text-amber leading-none">0</span>
             <span className="text-[16px] font-mono text-fg-muted">KES</span>
           </div>
           <div className="flex items-center gap-1.5 mt-1.5">
-            <span className="text-[12px] font-mono text-fg-muted">3 active markets</span>
+            <span className="text-[12px] font-mono text-fg-muted">Active bets locked</span>
           </div>
         </div>
 
         {/* Sparkline */}
         <div className="bg-bg p-5 flex flex-col justify-between">
           <span className="text-[12px] font-mono text-fg-muted uppercase tracking-wider">
-            7-Day Trend
+            Balance Trend
           </span>
           <div className="mt-2 flex-1 flex items-end">
-            <Sparkline data={balanceHistory} color="#22c55e" height={48} />
+            <Sparkline data={fakeHistory.map(Math.max.bind(null, 0))} color="#22c55e" height={48} />
           </div>
         </div>
       </motion.div>
@@ -125,122 +238,212 @@ export default function WalletPage() {
         >
           {/* Tabs */}
           <div className="grid grid-cols-2 border-b border-line">
-            <button
-              onClick={() => setTab("deposit")}
-              className={`h-10 text-[13px] font-mono uppercase tracking-wider transition-all ${
-                tab === "deposit"
-                  ? "bg-bg-above text-green font-semibold"
-                  : "text-fg-muted hover:text-fg-secondary"
-              }`}
-            >
-              Deposit
-            </button>
-            <button
-              onClick={() => setTab("withdraw")}
-              className={`h-10 text-[13px] font-mono uppercase tracking-wider border-l border-line transition-all ${
-                tab === "withdraw"
-                  ? "bg-bg-above text-green font-semibold"
-                  : "text-fg-muted hover:text-fg-secondary"
-              }`}
-            >
-              Withdraw
-            </button>
+            {(["deposit", "withdraw"] as TabType[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => { setTab(t); setStep("form"); setAmount(""); }}
+                className={`h-10 text-[13px] font-mono uppercase tracking-wider transition-all ${
+                  t === "withdraw" ? "border-l border-line" : ""
+                } ${
+                  tab === t
+                    ? "bg-bg-above text-green font-semibold"
+                    : "text-fg-muted hover:text-fg-secondary"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
 
           <div className="p-4 space-y-4">
-            {/* Amount input */}
-            <div>
-              <label className="text-[12px] font-mono text-fg-muted uppercase tracking-wider block mb-1.5">
-                Amount (KES)
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full h-10 px-3 text-[16px] font-mono bg-transparent border border-line rounded-md focus:border-green focus:ring-1 focus:ring-green/20 focus:outline-none transition-all tabular-nums"
-                placeholder="1000"
-                min="100"
-              />
-            </div>
+            <AnimatePresence mode="wait">
 
-            {/* Quick amounts */}
-            <div className="flex gap-1.5 flex-wrap">
-              {["500", "1000", "2000", "5000"].map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setAmount(v)}
-                  className={`h-8 px-3 text-[12px] font-mono border rounded-md transition-all ${
-                    amount === v
-                      ? "border-green text-green bg-green/8 font-semibold"
-                      : "border-line text-fg-muted hover:text-fg-secondary hover:border-line-bright"
-                  }`}
+              {/* ── FORM STEP ── */}
+              {step === "form" && (
+                <motion.div
+                  key="form"
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="space-y-4"
                 >
-                  {Number(v).toLocaleString()}
-                </button>
-              ))}
-            </div>
+                  {/* Phone input */}
+                  <div>
+                    <label className="text-[12px] font-mono text-fg-muted uppercase tracking-wider block mb-1.5">
+                      M-Pesa Number
+                    </label>
+                    <input
+                      id="wallet-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full h-10 px-3 text-[14px] font-mono bg-transparent border border-line rounded-md focus:border-green focus:ring-1 focus:ring-green/20 focus:outline-none transition-all"
+                      placeholder="07XXXXXXXX"
+                    />
+                  </div>
 
-            {/* Payment info */}
-            <div className="bg-bg-above/40 rounded-md p-3 space-y-2">
-              <div className="flex items-center justify-between text-[12px] font-mono">
-                <span className="text-fg-muted">Platform</span>
-                <span className="flex items-center gap-1.5 text-fg-secondary font-medium">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                    <rect width="24" height="24" rx="4" fill="#00C3F7" fillOpacity={0.15} />
-                    <path d="M7 8h10v2H7V8zm0 3h7v2H7v-2zm0 3h4v2H7v-2z" fill="currentColor" />
-                  </svg>
-                  Paystack
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-[12px] font-mono">
-                <span className="text-fg-muted">Fee</span>
-                <span className="text-fg-secondary">1.5%</span>
-              </div>
-              {amount && (
-                <div className="flex items-center justify-between text-[12px] font-mono pt-1 border-t border-line">
-                  <span className="text-fg-muted">You {tab === "deposit" ? "receive" : "get"}</span>
-                  <span className="text-green font-semibold">
+                  {/* Amount input */}
+                  <div>
+                    <label className="text-[12px] font-mono text-fg-muted uppercase tracking-wider block mb-1.5">
+                      Amount (KES)
+                    </label>
+                    <input
+                      id="wallet-amount"
+                      type="number"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      className="w-full h-10 px-3 text-[16px] font-mono bg-transparent border border-line rounded-md focus:border-green focus:ring-1 focus:ring-green/20 focus:outline-none transition-all tabular-nums"
+                      placeholder="1000"
+                      min="10"
+                      max={tab === "withdraw" ? balanceKES : 250000}
+                    />
+                    {tab === "withdraw" && walletData && (
+                      <p className="text-[11px] font-mono text-fg-muted mt-1">
+                        Available: KES {balanceKES.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quick amounts */}
+                  <div className="flex gap-1.5 flex-wrap">
+                    {QUICK_AMOUNTS.map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setAmount(v)}
+                        className={`h-8 px-3 text-[12px] font-mono border rounded-md transition-all ${
+                          amount === v
+                            ? "border-green text-green bg-green/8 font-semibold"
+                            : "border-line text-fg-muted hover:text-fg-secondary hover:border-line-bright"
+                        }`}
+                      >
+                        {Number(v).toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Fee breakdown */}
+                  {amount && Number(amount) > 0 && (
+                    <div className="bg-bg-above/40 rounded-md p-3 space-y-1.5 text-[12px] font-mono">
+                      <div className="flex justify-between">
+                        <span className="text-fg-muted">Provider</span>
+                        <span className="text-fg-secondary font-medium">IntaSend · M-Pesa</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-fg-muted">Platform fee</span>
+                        <span className="text-fg-secondary">2%</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-line">
+                        <span className="text-fg-muted">
+                          {tab === "deposit" ? "Credited to wallet" : "You receive"}
+                        </span>
+                        <span className="text-green font-semibold">
+                          KES {tab === "deposit"
+                            ? Number(amount).toLocaleString()
+                            : Math.floor(Number(amount) * 0.98).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <motion.button
+                    id={`wallet-${tab}-btn`}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={tab === "deposit" ? handleDeposit : handleWithdraw}
+                    className="w-full h-11 text-[14px] font-semibold bg-green text-white rounded-md hover:shadow-lg hover:shadow-green/20 transition-all flex items-center justify-center gap-2"
+                  >
+                    {tab === "deposit" ? "🟢 Deposit via M-Pesa" : "💸 Withdraw to M-Pesa"}
+                  </motion.button>
+
+                  <p className="text-[11px] font-mono text-fg-muted text-center">
                     {tab === "deposit"
-                      ? Number(amount).toLocaleString()
-                      : Math.floor(Number(amount) * 0.985).toLocaleString()
-                    } KES
-                  </span>
-                </div>
+                      ? "You'll receive an M-Pesa PIN prompt on your phone"
+                      : "Sent to your M-Pesa within minutes"}
+                  </p>
+                </motion.div>
               )}
-            </div>
 
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={handleTransaction}
-              disabled={processing}
-              className="w-full h-10 text-[14px] font-semibold bg-green text-white rounded-md hover:shadow-lg hover:shadow-green/20 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              {processing ? (
-                <>
+              {/* ── PENDING STEP ── */}
+              {step === "pending" && (
+                <motion.div
+                  key="pending"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center justify-center py-10 space-y-4 text-center"
+                >
                   <motion.div
-                    className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                    className="w-14 h-14 rounded-full border-4 border-green/30 border-t-green"
                     animate={{ rotate: 360 }}
-                    transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                    transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                   />
-                  Processing...
-                </>
-              ) : tab === "deposit" ? (
-                "Deposit with Paystack"
-              ) : (
-                "Withdraw to Bank"
+                  <div>
+                    <p className="text-[15px] font-semibold">
+                      {tab === "deposit" ? "Waiting for M-Pesa PIN..." : "Processing withdrawal..."}
+                    </p>
+                    <p className="text-[12px] font-mono text-fg-muted mt-1">
+                      {tab === "deposit"
+                        ? "Check your phone and enter your M-Pesa PIN"
+                        : "IntaSend is sending funds to your number"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setStep("form")}
+                    className="text-[12px] font-mono text-fg-muted hover:text-fg-secondary underline"
+                  >
+                    Cancel
+                  </button>
+                </motion.div>
               )}
-            </motion.button>
 
-            <p className="text-[11px] font-mono text-fg-muted text-center">
-              {tab === "deposit"
-                ? "Card, bank transfer, or mobile money supported"
-                : "Processed within 24 hours to your bank account"}
-            </p>
+              {/* ── SUCCESS STEP ── */}
+              {step === "success" && (
+                <motion.div
+                  key="success"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center justify-center py-10 space-y-3 text-center"
+                >
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="w-14 h-14 rounded-full bg-green/15 flex items-center justify-center text-[28px]"
+                  >
+                    ✅
+                  </motion.div>
+                  <p className="text-[16px] font-semibold text-green">
+                    {tab === "deposit" ? "Deposit Confirmed!" : "Withdrawal Sent!"}
+                  </p>
+                  <p className="text-[12px] font-mono text-fg-muted">
+                    KES {Number(amount).toLocaleString()} · Your balance has been updated.
+                  </p>
+                </motion.div>
+              )}
+
+              {/* ── FAILED STEP ── */}
+              {step === "failed" && (
+                <motion.div
+                  key="failed"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex flex-col items-center justify-center py-10 space-y-3 text-center"
+                >
+                  <div className="w-14 h-14 rounded-full bg-red/10 flex items-center justify-center text-[28px]">❌</div>
+                  <p className="text-[15px] font-semibold">Payment not confirmed</p>
+                  <p className="text-[12px] font-mono text-fg-muted">Check your M-Pesa messages. No money was deducted.</p>
+                  <button
+                    onClick={() => setStep("form")}
+                    className="h-9 px-4 text-[13px] font-semibold border border-line rounded-md hover:bg-bg-above transition-all"
+                  >
+                    Try Again
+                  </button>
+                </motion.div>
+              )}
+
+            </AnimatePresence>
           </div>
         </motion.div>
 
-        {/* ── Summary cards ── */}
+        {/* ── Right column: Stats ── */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
@@ -249,18 +452,24 @@ export default function WalletPage() {
         >
           <div className="grid grid-cols-2 gap-px bg-line border border-line rounded-lg overflow-hidden">
             {[
-              { label: "Total Deposited", val: "12,500", sub: "5 deposits", color: "text-fg" },
-              { label: "Total Withdrawn", val: "6,000", sub: "2 withdrawals", color: "text-fg" },
-              { label: "Net P&L", val: "+4,250", sub: "all time", color: "text-green" },
-              { label: "Avg. Stake", val: "1,250", sub: "per market", color: "text-fg" },
+              {
+                label: "Total Deposited",
+                val: `KES ${((walletData?.transactions.filter(t => t.type === "DEPOSIT" && t.status === "SUCCESS").reduce((s, t) => s + t.amountCents, 0) ?? 0) / 100).toLocaleString()}`,
+                sub: `${walletData?.transactions.filter(t => t.type === "DEPOSIT" && t.status === "SUCCESS").length ?? 0} deposits`,
+              },
+              {
+                label: "Total Withdrawn",
+                val: `KES ${((walletData?.transactions.filter(t => t.type === "WITHDRAWAL" && t.status === "SUCCESS").reduce((s, t) => s + t.amountCents, 0) ?? 0) / 100).toLocaleString()}`,
+                sub: `${walletData?.transactions.filter(t => t.type === "WITHDRAWAL" && t.status === "SUCCESS").length ?? 0} withdrawals`,
+              },
+              { label: "Current Balance", val: `KES ${balanceKES.toLocaleString()}`, sub: "available now", color: "text-green" },
+              { label: "Provider", val: "IntaSend", sub: "M-Pesa enabled" },
             ].map((s, i) => (
               <div key={i} className="bg-bg p-4">
-                <span className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">
-                  {s.label}
-                </span>
+                <span className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">{s.label}</span>
                 <div className="mt-1.5">
-                  <span className={`text-[22px] font-mono font-bold tabular-nums ${s.color}`}>
-                    {s.val}
+                  <span className={`text-[18px] font-mono font-bold tabular-nums ${"color" in s ? s.color : ""}`}>
+                    {loading ? "..." : s.val}
                   </span>
                   <span className="text-[11px] font-mono text-fg-muted ml-1.5">{s.sub}</span>
                 </div>
@@ -268,57 +477,34 @@ export default function WalletPage() {
             ))}
           </div>
 
-          {/* Payment methods */}
-          <div className="border border-line rounded-lg p-4">
-            <h3 className="text-[12px] font-mono text-fg-muted uppercase tracking-wider mb-3">
-              Payment Methods
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-2.5 bg-bg-above/40 rounded-md">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded bg-bg-above border border-line flex items-center justify-center text-[12px] font-mono font-bold text-fg-muted">
-                    💳
-                  </div>
-                  <div>
-                    <span className="text-[13px] font-medium block">Visa •••• 4242</span>
-                    <span className="text-[11px] font-mono text-fg-muted">Expires 12/26</span>
-                  </div>
-                </div>
-                <span className="text-[11px] font-mono text-green">Default</span>
-              </div>
-              <button
-                onClick={() => toast("info", "Coming soon", "Payment method management will be available soon")}
-                className="w-full flex items-center justify-center gap-1.5 h-9 border border-dashed border-line rounded-md text-[12px] font-mono text-fg-muted hover:text-fg-secondary hover:border-line-bright transition-all"
-              >
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                Add payment method
-              </button>
+          {/* M-Pesa badge */}
+          <div className="border border-green/20 bg-green/5 rounded-lg p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green/15 flex items-center justify-center text-[20px]">📱</div>
+            <div>
+              <p className="text-[14px] font-semibold">Powered by M-Pesa via IntaSend</p>
+              <p className="text-[12px] font-mono text-fg-muted mt-0.5">
+                Instant deposits · Withdrawals in minutes · 2% platform fee
+              </p>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* ── Transactions ── */}
+      {/* ── Transaction history ── */}
       <motion.div
         initial={{ opacity: 0, y: 14 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35, duration: 0.45 }}
       >
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[13px] font-mono text-fg-muted uppercase tracking-wider">
-            Transactions
-          </h2>
+          <h2 className="text-[13px] font-mono text-fg-muted uppercase tracking-wider">Transactions</h2>
           <div className="flex items-center h-7 border border-line rounded-md overflow-hidden">
-            {([["all", "All"], ["in", "In"], ["out", "Out"]] as const).map(([key, label]) => (
+            {([ ["all", "All"], ["in", "In"], ["out", "Out"] ] as const).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setTxnFilter(key)}
                 className={`px-2.5 h-full text-[11px] font-mono uppercase tracking-wider transition-all ${
-                  txnFilter === key
-                    ? "bg-bg-above text-fg font-semibold"
-                    : "text-fg-muted hover:text-fg-secondary"
+                  txnFilter === key ? "bg-bg-above text-fg font-semibold" : "text-fg-muted hover:text-fg-secondary"
                 }`}
               >
                 {label}
@@ -328,76 +514,61 @@ export default function WalletPage() {
         </div>
 
         <div className="border border-line rounded-lg overflow-hidden">
-          {/* Desktop header */}
-          <div className="hidden sm:grid grid-cols-[1fr_90px_80px_100px] h-9 items-center px-3 border-b border-line bg-bg-above/40 text-[11px] font-mono text-fg-muted uppercase tracking-wider">
-            <span>Description</span>
-            <span className="text-right">Amount</span>
-            <span className="text-right">Date</span>
-            <span className="text-right">Ref</span>
-          </div>
-          {filteredTxns.map((t, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -6 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 + i * 0.04, duration: 0.3 }}
-            >
-              {/* Desktop row */}
-              <div className="hidden sm:grid grid-cols-[1fr_90px_80px_100px] h-11 items-center px-3 border-b border-line last:border-b-0 text-[13px] hover:bg-bg-above/40 transition-colors">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${
-                    t.type === "win" ? "bg-green/10" :
-                    t.type === "stake" ? "bg-red/10" :
-                    "bg-bg-above"
-                  }`}>
-                    <svg
-                      className={`w-3 h-3 ${
-                        t.type === "win" ? "text-green" :
-                        t.type === "stake" ? "text-red" :
-                        "text-fg-muted"
-                      }`}
-                      fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d={typeIcons[t.type]} />
-                    </svg>
+          {loading ? (
+            <div className="p-8 text-center text-[13px] font-mono text-fg-muted">Loading transactions...</div>
+          ) : filteredTxns.length === 0 ? (
+            <div className="p-8 text-center text-[13px] font-mono text-fg-muted">
+              No transactions yet. Make your first deposit above 👆
+            </div>
+          ) : (
+            <>
+              <div className="hidden sm:grid grid-cols-[1fr_100px_90px_80px] h-9 items-center px-3 border-b border-line bg-bg-above/40 text-[11px] font-mono text-fg-muted uppercase tracking-wider">
+                <span>Description</span>
+                <span className="text-right">Amount</span>
+                <span className="text-right">Status</span>
+                <span className="text-right">Date</span>
+              </div>
+              {filteredTxns.map((t, i) => (
+                <motion.div
+                  key={t.id}
+                  initial={{ opacity: 0, x: -6 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.4 + i * 0.04, duration: 0.3 }}
+                >
+                  <div className="hidden sm:grid grid-cols-[1fr_100px_90px_80px] h-11 items-center px-3 border-b border-line last:border-b-0 text-[13px] hover:bg-bg-above/40 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${t.type === "DEPOSIT" ? "bg-green" : "bg-amber"}`} />
+                      <span>{t.type === "DEPOSIT" ? "M-Pesa Deposit" : "M-Pesa Withdrawal"}</span>
+                    </div>
+                    <span className={`text-right font-mono font-semibold ${t.type === "DEPOSIT" ? "text-green" : "text-fg"}`}>
+                      {t.type === "DEPOSIT" ? "+" : "-"}KES {(t.amountCents / 100).toLocaleString()}
+                    </span>
+                    <span className="flex justify-end"><StatusBadge status={t.status} /></span>
+                    <span className="text-right font-mono text-fg-muted text-[11px]">
+                      {new Date(t.createdAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
+                    </span>
                   </div>
-                  <span className="truncate">{t.desc}</span>
-                </div>
-                <span className={`text-right font-mono font-semibold ${typeColors[t.type]}`}>
-                  {t.amt}
-                </span>
-                <span className="text-right font-mono text-fg-muted text-[12px]">{t.date}</span>
-                <span className="text-right font-mono text-fg-muted text-[11px]">{t.ref}</span>
-              </div>
 
-              {/* Mobile row */}
-              <div className="sm:hidden flex items-center gap-2.5 px-3 py-2.5 border-b border-line last:border-b-0">
-                <div className={`w-7 h-7 rounded flex items-center justify-center shrink-0 ${
-                  t.type === "win" ? "bg-green/10" :
-                  t.type === "stake" ? "bg-red/10" :
-                  "bg-bg-above"
-                }`}>
-                  <svg
-                    className={`w-3.5 h-3.5 ${
-                      t.type === "win" ? "text-green" :
-                      t.type === "stake" ? "text-red" :
-                      "text-fg-muted"
-                    }`}
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d={typeIcons[t.type]} />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] truncate">{t.desc}</p>
-                  <span className="text-[11px] font-mono text-fg-muted">{t.date}</span>
-                </div>
-                <span className={`text-[13px] font-mono font-semibold shrink-0 ${typeColors[t.type]}`}>
-                  {t.amt}
-                </span>
-              </div>
-            </motion.div>
-          ))}
+                  {/* Mobile row */}
+                  <div className="sm:hidden flex items-center gap-2.5 px-3 py-2.5 border-b border-line last:border-b-0">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${t.type === "DEPOSIT" ? "bg-green" : "bg-amber"}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[13px]">{t.type === "DEPOSIT" ? "M-Pesa Deposit" : "Withdrawal"}</p>
+                      <span className="text-[11px] font-mono text-fg-muted">
+                        {new Date(t.createdAt).toLocaleDateString("en-KE", { month: "short", day: "numeric" })}
+                      </span>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <p className={`text-[13px] font-mono font-semibold ${t.type === "DEPOSIT" ? "text-green" : "text-fg"}`}>
+                        {t.type === "DEPOSIT" ? "+" : "-"}KES {(t.amountCents / 100).toLocaleString()}
+                      </p>
+                      <StatusBadge status={t.status} />
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </>
+          )}
         </div>
       </motion.div>
     </div>
