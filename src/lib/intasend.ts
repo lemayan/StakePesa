@@ -70,13 +70,9 @@ export async function initiateSTKPush(
     const client = getClient()
     const collection = client.collection()
 
-    const host = process.env.AUTH_URL ?? process.env.NEXTAUTH_URL ?? "https://stake-pesa.vercel.app"
-
     const result = await collection.mpesaStkPush({
-        first_name: firstName,
-        last_name: "StakePesa",
+        name: firstName,
         email: "payments@stakepesa.com",
-        host,
         amount: amountKES,
         phone_number: phone,
         api_ref: apiRef,

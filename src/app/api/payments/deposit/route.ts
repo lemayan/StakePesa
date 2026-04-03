@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     )
 
     if (!result.success) {
-        return NextResponse.json({ error: result.error }, { status: 400 })
+        return NextResponse.json({ error: result.error, debug: "deposit failed" }, { status: 400 })
     }
 
     return NextResponse.json({
