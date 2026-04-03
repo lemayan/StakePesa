@@ -223,7 +223,7 @@ export default function WalletPage() {
             Balance Trend
           </span>
           <div className="mt-2 flex-1 flex items-end">
-            <Sparkline data={fakeHistory.map(Math.max.bind(null, 0))} color="#22c55e" height={48} />
+            <Sparkline data={fakeHistory.map((v) => Math.max(0, v))} color="#22c55e" height={48} />
           </div>
         </div>
       </motion.div>
