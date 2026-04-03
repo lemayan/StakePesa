@@ -1,0 +1,239 @@
+{
+  "last_updated": "2026-03-18",
+  "verification_level": "safe_realistic_non_live",
+  "markets": [
+    {
+      "category": "politics",
+      "title": "Kenya Presidential Election 2027 Winner",
+      "id": "pres_2027",
+      "options": [
+        {"name": "William Ruto", "probability": 0.40},
+        {"name": "Opposition Candidate", "probability": 0.40},
+        {"name": "Other", "probability": 0.20}
+      ],
+      "news": [
+        {
+          "headline": "Early political alignments begin ahead of 2027 elections",
+          "summary": "Political leaders are positioning themselves, but no clear frontrunner has been officially established.",
+          "impact": "neutral",
+          "confidence": 0.6
+        },
+        {
+          "headline": "Opposition unity remains uncertain",
+          "summary": "Discussions continue among opposition figures, with no confirmed coalition structure yet.",
+          "impact": "neutral",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "category": "politics",
+      "title": "Nairobi Governor Election 2027 Winner",
+      "id": "nairobi_2027",
+      "options": [
+        {"name": "Johnson Sakaja", "probability": 0.35},
+        {"name": "Babu Owino", "probability": 0.35},
+        {"name": "Other", "probability": 0.30}
+      ],
+      "news": [
+        {
+          "headline": "Nairobi politics intensifies ahead of next election cycle",
+          "summary": "Multiple leaders are expected to contest, making the race highly competitive.",
+          "impact": "neutral",
+          "confidence": 0.65
+        }
+      ]
+    },
+    {
+      "category": "sports",
+      "title": "English Premier League Winner",
+      "id": "epl_winner",
+      "options": [
+        {"name": "Arsenal", "probability": 0.35},
+        {"name": "Manchester City", "probability": 0.30},
+        {"name": "Liverpool", "probability": 0.20},
+        {"name": "Other", "probability": 0.15}
+      ],
+      "news": [
+        {
+          "headline": "Premier League title race remains competitive",
+          "summary": "Multiple teams remain in contention as the season progresses.",
+          "impact": "neutral",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "category": "sports",
+      "title": "Will Arsenal Win the Quadruple this Season?",
+      "id": "arsenal_quadruple",
+      "options": [
+        {"name": "No", "probability": 0.85},
+        {"name": "Yes", "probability": 0.15}
+      ],
+      "news": [
+        {
+          "headline": "Arsenal fans dream of historic quadruple",
+          "summary": "Mikel Arteta's side remains mathematically alive in all four major competitions.",
+          "impact": "positive_yes",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "category": "sports",
+      "title": "Will Harambee Stars Qualify for AFCON 2027?",
+      "id": "harambee_afcon",
+      "options": [
+        {"name": "Yes", "probability": 0.45},
+        {"name": "No", "probability": 0.55}
+      ],
+      "news": [
+        {
+          "headline": "Crucial qualifiers ahead for Harambee Stars",
+          "summary": "Kenya faces tough opposition in their group stage matches.",
+          "impact": "neutral",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "category": "sports",
+      "title": "Who will win the NBA Championship 2026?",
+      "id": "nba_champ",
+      "options": [
+        {"name": "Denver Nuggets", "probability": 0.30},
+        {"name": "Boston Celtics", "probability": 0.30},
+        {"name": "OKC Thunder", "probability": 0.20},
+        {"name": "Other", "probability": 0.20}
+      ],
+      "news": [
+        {
+          "headline": "Western Conference arms race heats up",
+          "summary": "Top seeds continue to bolster their rosters ahead of the playoffs.",
+          "impact": "neutral",
+          "confidence": 0.65
+        }
+      ]
+    },
+    {
+      "category": "sports",
+      "title": "Will Faith Kipyegon Break Another World Record?",
+      "id": "kipyegon_wr",
+      "options": [
+        {"name": "Yes", "probability": 0.60},
+        {"name": "No", "probability": 0.40}
+      ],
+      "news": [
+        {
+          "headline": "Kipyegon dominates early track season",
+          "summary": "The Kenyan superstar shows phenomenal form in recent Diamond League appearances.",
+          "impact": "positive_yes",
+          "confidence": 0.85
+        }
+      ]
+    },
+    {
+      "category": "economics",
+      "title": "Will Cost of Living Increase in Kenya?",
+      "id": "cost_living",
+      "options": [
+        {"name": "Yes", "probability": 0.65},
+        {"name": "No", "probability": 0.35}
+      ],
+      "news": [
+        {
+          "headline": "Inflation concerns remain a key economic issue",
+          "summary": "Cost pressures continue to affect households, though future direction is uncertain.",
+          "impact": "positive_yes",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "category": "crypto",
+      "title": "Will Bitcoin Reach New All-Time High?",
+      "id": "btc_ath",
+      "options": [
+        {"name": "Yes", "probability": 0.50},
+        {"name": "No", "probability": 0.50}
+      ],
+      "news": [
+        {
+          "headline": "Crypto market shows mixed signals",
+          "summary": "Investor sentiment remains divided as market conditions fluctuate.",
+          "impact": "neutral",
+          "confidence": 0.65
+        }
+      ]
+    },
+    {
+      "category": "tech",
+      "title": "Will AI Adoption Increase Globally?",
+      "id": "ai_growth",
+      "options": [
+        {"name": "Yes", "probability": 0.70},
+        {"name": "No", "probability": 0.30}
+      ],
+      "news": [
+        {
+          "headline": "Businesses continue integrating AI tools",
+          "summary": "Adoption trends suggest continued growth across industries.",
+          "impact": "positive_yes",
+          "confidence": 0.8
+        }
+      ]
+    },
+    {
+      "category": "climate",
+      "title": "Will Kenya Experience Severe Weather Events?",
+      "id": "climate_kenya",
+      "options": [
+        {"name": "Yes", "probability": 0.60},
+        {"name": "No", "probability": 0.40}
+      ],
+      "news": [
+        {
+          "headline": "Weather variability remains a concern",
+          "summary": "Climate patterns suggest increased unpredictability in rainfall and temperatures.",
+          "impact": "positive_yes",
+          "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "category": "health",
+      "title": "Will a Major Health Outbreak Occur?",
+      "id": "health_outbreak",
+      "options": [
+        {"name": "Yes", "probability": 0.40},
+        {"name": "No", "probability": 0.60}
+      ],
+      "news": [
+        {
+          "headline": "Health systems maintain surveillance measures",
+          "summary": "Preparedness efforts reduce but do not eliminate outbreak risks.",
+          "impact": "positive_no",
+          "confidence": 0.75
+        }
+      ]
+    },
+    {
+      "category": "finance",
+      "title": "Will Interest Rates Increase in Kenya?",
+      "id": "interest_rates",
+      "options": [
+        {"name": "Yes", "probability": 0.55},
+        {"name": "No", "probability": 0.45}
+      ],
+      "news": [
+        {
+          "headline": "Central bank monitoring inflation trends",
+          "summary": "Future rate decisions will depend on inflation and economic stability.",
+          "impact": "neutral",
+          "confidence": 0.7
+        }
+      ]
+    }
+  ]
+}

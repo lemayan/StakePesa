@@ -1,0 +1,410 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ──────────────────────────────────────────────
+// ENUMS
+enum ImageSource {
+  WIKIMEDIA
+  AI
+  MANUAL
+}
+
+enum EntityType {
+  PERSON
+  SPORTS_TEAM
+  COMPETITION
+  CRYPTO
+  GENERIC
+}
+
+// ──────────────────────────────────────────────
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum TransactionType {
+  VERIFY
+  DEPOSIT
+  WITHDRAW
+}
+
+enum LedgerEntryType {
+  CREDIT
+  DEBIT
+  ESCROW_LOCK
+  ESCROW_RELEASE
+  FEE
+}
+
+enum ChallengeStatus {
+  PENDING
+  ACTIVE
+  RESOLVED
+  DISPUTED
+}
+
+enum VerificationMethod {
+  MUTUAL
+  ADMIN
+  REFEREE
+}
+
+enum ChallengeFundingMode {
+  SPLIT_PARTICIPANT
+  CREATOR_FUNDED
+}
+
+enum DepositStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum EscrowStatus {
+  LOCKED
+  RELEASED
+  REFUNDED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum VerificationVerdict {
+  APPROVE
+  REJECT
+}
+
+// ──────────────────────────────────────────────
+// AUTH MODELS (existing — NextAuth v5)
+// ──────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+
+  // Auth relations
+  accounts Account[]
+  sessions Session[]
+
+  // Financial relations
+  paymentProfile        PaymentProfile?
+  wallet                Wallet?
+  mpesaTransactions     MpesaTransaction[]
+  ledgerEntries         LedgerEntry[]
+  createdChallenges     Challenge[]            @relation("ChallengeCreator")
+  refereedChallenges    Challenge[]            @relation("ChallengeReferee")
+  challengeParticipants ChallengeParticipant[]
+  challengeInvitesSent  ChallengeInvitation[]   @relation("ChallengeInvitationSender")
+  challengeInvites      ChallengeInvitation[]   @relation("ChallengeInvitationUser")
+  disputesRaised        ChallengeDispute[]      @relation("ChallengeDisputeRaisedBy")
+  disputesResolved      ChallengeDispute[]      @relation("ChallengeDisputeResolvedBy")
+  verificationVotes     ChallengeVerificationVote[]
+  resolvedChallenges    Challenge[]             @relation("ChallengeResolver")
+  escrowLocks           EscrowLock[]
+  auditLogs             AuditLog[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ──────────────────────────────────────────────
+// FINANCIAL MODELS
+// ──────────────────────────────────────────────
+
+/// M-Pesa phone binding. One per user. Never deleted.
+model PaymentProfile {
+  id          String    @id @default(uuid())
+  userId      String    @unique
+  phoneNumber String    // E.164 format: +2547XXXXXXXX
+  isVerified  Boolean   @default(false)
+  verifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([phoneNumber])
+}
+
+/// Immutable M-Pesa transaction log. Append-only.
+model MpesaTransaction {
+  id                String            @id @default(uuid())
+  userId            String
+  phoneNumber       String
+  amount            Int               // Amount in KES cents (100 = KES 1)
+  mpesaReceipt      String?           // Safaricom receipt number
+  checkoutRequestId String            @unique
+  merchantRequestId String
+  status            TransactionStatus @default(PENDING)
+  type              TransactionType
+  rawCallback       Json?             // Full Daraja callback JSON
+  resultCode        Int?              // Daraja result code
+  resultDesc        String?           // Daraja result description
+  createdAt         DateTime          @default(now())
+
+  user          User          @relation(fields: [userId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([checkoutRequestId])
+}
+
+/// Internal wallet. One per user. Balance in KES cents.
+/// Balance is ONLY mutated through Postgres RPC functions.
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  balance   Int      @default(0) // KES cents. NEVER negative.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User          @relation(fields: [userId], references: [id])
+  ledgerEntries LedgerEntry[]
+}
+
+/// Append-only financial ledger. Every wallet mutation has a corresponding entry.
+/// This is the source of truth for financial auditing.
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  userId        String
+  walletId      String
+  transactionId String?         // FK to MpesaTransaction (nullable for internal ops)
+  entryType     LedgerEntryType
+  amount        Int             // Always positive. Direction determined by entryType.
+  balanceAfter  Int             // Wallet balance after this entry.
+  description   String?         // Human-readable note
+  createdAt     DateTime        @default(now())
+
+  user        User              @relation(fields: [userId], references: [id])
+  wallet      Wallet            @relation(fields: [walletId], references: [id])
+  transaction MpesaTransaction? @relation(fields: [transactionId], references: [id])
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([transactionId])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// CHALLENGE & ESCROW MODELS
+// ──────────────────────────────────────────────
+
+/// Accountability challenge. Replaces the old Wager model.
+model Challenge {
+  id                 String             @id @default(uuid())
+  creatorId          String
+  title              String
+  description        String?
+  endDate            DateTime
+  marketId           String?            // If linked to a static public market
+  refereeId          String?            // User acting as referee (admin or 3rd party)
+  resolvedById       String?
+  resolvedAt         DateTime?
+  resolutionNotes    String?
+  status             ChallengeStatus    @default(PENDING)
+  verificationMethod VerificationMethod @default(MUTUAL)
+  fundingMode        ChallengeFundingMode @default(SPLIT_PARTICIPANT)
+  maxParticipants    Int                @default(2)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  creator      User                   @relation("ChallengeCreator", fields: [creatorId], references: [id])
+  referee      User?                  @relation("ChallengeReferee", fields: [refereeId], references: [id])
+  resolvedBy   User?                  @relation("ChallengeResolver", fields: [resolvedById], references: [id])
+  participants ChallengeParticipant[]
+  invitations  ChallengeInvitation[]
+  disputes     ChallengeDispute[]
+  verificationVotes ChallengeVerificationVote[]
+  escrowLocks  EscrowLock[]
+
+  @@index([creatorId])
+  @@index([refereeId])
+  @@index([resolvedById])
+  @@index([status])
+}
+
+model ChallengeVerificationVote {
+  id          String              @id @default(uuid())
+  challengeId String
+  userId      String
+  verdict     VerificationVerdict
+  note        String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  challenge   Challenge           @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id])
+
+  @@unique([challengeId, userId])
+  @@index([challengeId])
+  @@index([userId])
+}
+
+/// Tracks each user's participation and deposit status in a challenge.
+model ChallengeParticipant {
+  id            String        @id @default(uuid())
+  challengeId   String
+  userId        String
+  amount        Int           @default(0) // KES cents staked by this individual
+  depositStatus DepositStatus @default(PENDING)
+  joinedAt      DateTime      @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([challengeId, userId])
+}
+
+/// Invitation to a challenge, supports both registered users and email-only invites.
+model ChallengeInvitation {
+  id            String           @id @default(uuid())
+  challengeId   String
+  invitedById   String
+  invitedUserId String?
+  email         String
+  stakeAmount   Int              // KES cents staked by this invitee
+  status        InvitationStatus @default(PENDING)
+  acceptedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  invitedBy   User      @relation("ChallengeInvitationSender", fields: [invitedById], references: [id])
+  invitedUser User?     @relation("ChallengeInvitationUser", fields: [invitedUserId], references: [id])
+
+  @@unique([challengeId, email])
+  @@index([email])
+  @@index([invitedUserId])
+  @@index([status])
+}
+
+/// Raised when challenge outcome is contested.
+model ChallengeDispute {
+  id           String   @id @default(uuid())
+  challengeId  String
+  raisedById   String
+  resolvedById String?
+  reason       String
+  resolution   String?
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  raisedBy    User      @relation("ChallengeDisputeRaisedBy", fields: [raisedById], references: [id])
+  resolvedBy  User?     @relation("ChallengeDisputeResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([challengeId])
+  @@index([raisedById])
+  @@index([resolvedById])
+}
+
+/// Per-user escrow entry for a challenge. Funds locked until resolution.
+model EscrowLock {
+  id          String       @id @default(uuid())
+  challengeId String
+  userId      String
+  amount      Int          // KES cents locked
+  status      EscrowStatus @default(LOCKED)
+  createdAt   DateTime     @default(now())
+
+  challenge Challenge @relation(fields: [challengeId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([challengeId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ──────────────────────────────────────────────
+// AUDIT & SYSTEM
+// ──────────────────────────────────────────────
+
+/// System-wide audit trail. Append-only.
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  action    String   // e.g. "PHONE_VERIFIED", "WALLET_CREDITED", "ESCROW_LOCKED"
+  metadata  Json?    // Contextual data
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ──────────────────────────────────────────────
+// MARKET IMAGES
+// ──────────────────────────────────────────────
+
+/// Image metadata for market options (candidates, teams, outcomes).
+/// Bridges static markets.json with DB-stored image URLs.
+/// NOTE: entityType and imageSource use String type (not Prisma enum) so the
+/// old generated client DLL (locked by dev server) can send values without
+/// compile-time enum validation. The DB constraint is still enforced at schema level.
+model MarketOption {
+  id            String   @id @default(uuid())
+  marketId      String   // matches market.id from markets.json
+  optionName    String   // matches option.name from markets.json
+  entityType    String   @default("GENERIC") // PERSON|SPORTS_TEAM|COMPETITION|CRYPTO|GENERIC
+  imageUrl      String?  // resolved CDN or external URL (null for GENERIC)
+  imageSource   String?  // WIKIMEDIA|AI|MANUAL|API
+  imageVerified Boolean  @default(false) // true if from trusted source
+  imageShape    String?  // 'circle' | 'square' — drives frontend rendering
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([marketId, optionName])
+  @@index([marketId])
+}

@@ -1,26 +1,141 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
+@custom-variant dark (&:is(.dark *));
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-sans: var(--font-space);
+  --font-mono: var(--font-jetbrains), "SF Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+
+  --color-bg: var(--c-bg);
+  --color-bg-above: var(--c-bg-above);
+  --color-bg-hover: var(--c-bg-hover);
+  --color-fg: var(--c-fg);
+  --color-fg-secondary: var(--c-fg-secondary);
+  --color-fg-muted: var(--c-fg-muted);
+  --color-line: var(--c-line);
+  --color-line-bright: var(--c-line-bright);
+  --color-green: var(--c-green);
+  --color-green-dim: var(--c-green-dim);
+  --color-red: var(--c-red);
+  --color-red-dim: var(--c-red-dim);
+  --color-amber: var(--c-amber);
+  --color-amber-dim: var(--c-amber-dim);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --c-bg: #ffffff;
+    --c-bg-above: #f6f6f6;
+    --c-bg-hover: #eeeeee;
+    --c-fg: #0a0a0a;
+    --c-fg-secondary: #444444;
+    --c-fg-muted: #999999;
+    --c-line: #e0e0e0;
+    --c-line-bright: #cccccc;
+    --c-green: #16a34a;
+    --c-green-dim: #dcfce7;
+    --c-red: #dc2626;
+    --c-red-dim: #fef2f2;
+    --c-amber: #d97706;
+    --c-amber-dim: #fef9c3;
+    --c-glow: rgba(22,163,74,0.25);
+  }
+
+  .dark {
+    --c-bg: #121214;
+    --c-bg-above: #1c1c1f;
+    --c-bg-hover: #27272a;
+    --c-fg: #f9f9f9;
+    --c-fg-secondary: #c0c0c0;
+    --c-fg-muted: #888888;
+    --c-line: #27272a;
+    --c-line-bright: #3f3f46;
+    --c-green: #22c55e;
+    --c-green-dim: rgba(34,197,94,0.14);
+    --c-red: #ef4444;
+    --c-red-dim: rgba(239,68,68,0.14);
+    --c-amber: #f59e0b;
+    --c-amber-dim: rgba(245,158,11,0.14);
+    --c-glow: rgba(34,197,94,0.35);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--c-bg);
+    color: var(--c-fg);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "ss02", "cv01";
+  }
+
+  ::selection {
+    background: var(--c-green);
+    color: #fff;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* ── Ticker tape ── */
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
+.animate-ticker {
+  animation: ticker 45s linear infinite;
+}
+
+/* ── Pulse dot ── */
+@keyframes livepulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-livepulse {
+  animation: livepulse 2s ease-in-out infinite;
+}
+
+/* ── Green glow animation ── */
+@keyframes greenglow {
+  0%, 100% { box-shadow: 0 0 8px var(--c-glow), 0 0 24px transparent; }
+  50% { box-shadow: 0 0 16px var(--c-glow), 0 0 48px var(--c-glow); }
+}
+.animate-glow {
+  animation: greenglow 3s ease-in-out infinite;
+}
+
+/* ── Gradient text for hero emphasis ── */
+.text-shimmer {
+  color: var(--c-green);
+  font-weight: 800;
+}
+
+/* ── Grid background pattern ── */
+.bg-grid {
+  background-image:
+    linear-gradient(var(--c-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--c-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+/* ── Progress bar fill ── */
+@keyframes fillbar {
+  from { width: 0%; }
+}
+.animate-fill {
+  animation: fillbar 1.2s ease-out forwards;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ── Smooth number transitions ── */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-line-bright); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-fg-muted); }
