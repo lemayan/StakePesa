@@ -45,6 +45,7 @@ export default function WalletPage() {
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<Step>("form");
+  const [pendingApiRef, setPendingApiRef] = useState<string | null>(null);
   const [walletData, setWalletData] = useState<WalletData | null>(null);
   const [loading, setLoading] = useState(true);
   const [txnFilter, setTxnFilter] = useState<"all" | "in" | "out">("all");
@@ -92,6 +93,7 @@ export default function WalletPage() {
       // Show pending — user must approve on phone
       // Poll for status every 5s for up to 2 min
       toast("success", "M-Pesa prompt sent!", "Check your phone and enter your PIN.");
+      setPendingApiRef(data.apiRef);
       pollForConfirmation(data.apiRef, amt);
     } catch {
       toast("error", "Network error", "Please try again.");
@@ -396,6 +398,30 @@ export default function WalletPage() {
                   >
                     Cancel
                   </button>
+                  {/* Test-only simulate button */}
+                  {pendingApiRef && (
+                    <button
+                      onClick={async () => {
+                        const res = await fetch("/api/payments/test-webhook", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ apiRef: pendingApiRef }),
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                          fetchWallet();
+                          setStep("success");
+                          toast("success", "Payment simulated! 🎉", "Wallet balance updated.");
+                          setTimeout(() => { setStep("form"); setAmount(""); }, 4000);
+                        } else {
+                          toast("error", "Simulate failed", data.error);
+                        }
+                      }}
+                      className="h-8 px-4 text-[12px] font-mono border border-amber/40 text-amber rounded-md hover:bg-amber/10 transition-all"
+                    >
+                      🧪 Simulate Payment (Test Mode)
+                    </button>
+                  )}
                 </motion.div>
               )}
 
