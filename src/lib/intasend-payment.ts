@@ -129,28 +129,38 @@ export async function processIntaSendWebhook(
 ): Promise<WebhookResult> {
 
     const apiRef = payload.api_ref
+    const invoiceId = payload.invoice_id
     const state = payload.state?.toUpperCase()
 
-    if (!apiRef) {
+    console.info("[WEBHOOK] Processing:", { apiRef, invoiceId, state })
+
+    if (!apiRef && !invoiceId) {
         // Might be a payout webhook — handle separately
         if (payload.id && payload.transactions) {
             return processPayoutWebhook(payload)
         }
-        return { processed: false, error: "No api_ref in payload" }
+        return { processed: false, error: "No api_ref or invoice_id in payload" }
     }
 
-    // Find the pending transaction
-    const txn = await db.intaSendTransaction.findUnique({
-        where: { apiRef },
-    })
+    // Find the pending transaction — try api_ref first, then invoice_id
+    let txn = apiRef
+        ? await db.intaSendTransaction.findUnique({ where: { apiRef } })
+        : null
+
+    if (!txn && invoiceId) {
+        txn = await db.intaSendTransaction.findFirst({
+            where: { invoiceId },
+        })
+    }
 
     if (!txn) {
-        console.warn("[WEBHOOK] Unknown api_ref:", apiRef)
+        console.warn("[WEBHOOK] Unknown transaction — apiRef:", apiRef, "invoiceId:", invoiceId)
         return { processed: false, error: "Unknown transaction" }
     }
 
     // Idempotency — already processed?
     if (txn.status !== TransactionStatus.PENDING) {
+        console.info("[WEBHOOK] Already processed:", txn.id, txn.status)
         return { processed: true, type: txn.type as "DEPOSIT" | "WITHDRAWAL" }
     }
 
@@ -158,31 +168,33 @@ export async function processIntaSendWebhook(
         // ── SUCCESS PATH ──
         await db.$transaction(async (tx) => {
             await tx.intaSendTransaction.update({
-                where: { id: txn.id },
+                where: { id: txn!.id },
                 data: {
                     status: TransactionStatus.SUCCESS,
                     rawWebhook: payload as any,
+                    ...(invoiceId && !txn!.invoiceId ? { invoiceId } : {}),
                 },
             })
 
             await tx.auditLog.create({
                 data: {
-                    userId: txn.userId,
-                    action: txn.type === "DEPOSIT" ? "DEPOSIT_CONFIRMED" : "WITHDRAWAL_CONFIRMED",
-                    metadata: { apiRef, amountCents: txn.amountCents },
+                    userId: txn!.userId,
+                    action: txn!.type === "DEPOSIT" ? "DEPOSIT_CONFIRMED" : "WITHDRAWAL_CONFIRMED",
+                    metadata: { apiRef, invoiceId, amountCents: txn!.amountCents },
                 },
             })
         })
 
-        // Credit wallet OUTSIDE Prisma transaction (uses raw SQL row lock)
+        // Credit wallet OUTSIDE Prisma transaction (uses row lock)
         if (txn.type === "DEPOSIT") {
             await creditWallet(
                 txn.userId,
                 txn.amountCents,
                 txn.id,
                 "CREDIT",
-                `M-Pesa deposit via IntaSend (ref: ${apiRef.slice(0, 8)})`
+                `M-Pesa deposit via IntaSend (ref: ${(apiRef ?? invoiceId ?? "").slice(0, 8)})`
             )
+            console.info("[WEBHOOK] Wallet credited:", txn.userId, txn.amountCents, "cents")
         }
 
         return { processed: true, type: txn.type as "DEPOSIT" | "WITHDRAWAL" }
@@ -191,7 +203,7 @@ export async function processIntaSendWebhook(
         // ── FAILURE PATH ──
         await db.$transaction(async (tx) => {
             await tx.intaSendTransaction.update({
-                where: { id: txn.id },
+                where: { id: txn!.id },
                 data: {
                     status: TransactionStatus.FAILED,
                     rawWebhook: payload as any,
@@ -200,8 +212,8 @@ export async function processIntaSendWebhook(
 
             await tx.auditLog.create({
                 data: {
-                    userId: txn.userId,
-                    action: txn.type === "DEPOSIT" ? "DEPOSIT_FAILED" : "WITHDRAWAL_FAILED",
+                    userId: txn!.userId,
+                    action: txn!.type === "DEPOSIT" ? "DEPOSIT_FAILED" : "WITHDRAWAL_FAILED",
                     metadata: {
                         apiRef,
                         reason: payload.failed_reason ?? "Unknown",
@@ -225,6 +237,7 @@ export async function processIntaSendWebhook(
     }
 
     // PENDING / PROCESSING — do nothing, wait for next webhook
+    console.info("[WEBHOOK] State still pending:", state)
     return { processed: false, error: `Transaction still ${state}` }
 }
 
