@@ -92,7 +92,7 @@ export default function WalletPage() {
       // Show pending — user must approve on phone
       // Poll for status every 5s for up to 2 min
       toast("success", "M-Pesa prompt sent!", "Check your phone and enter your PIN.");
-      pollForConfirmation(data.apiRef);
+      pollForConfirmation(data.apiRef, amt);
     } catch {
       toast("error", "Network error", "Please try again.");
       setStep("form");
@@ -134,30 +134,35 @@ export default function WalletPage() {
     }
   };
 
-  // ── Poll webhook confirmation ──────────────────
-  const pollForConfirmation = (apiRef: string) => {
+  // ── Poll for specific transaction status ──────
+  const pollForConfirmation = (apiRef: string, amtKES: number) => {
     let attempts = 0;
     const maxAttempts = 24; // 2 minutes at 5s intervals
 
     const interval = setInterval(async () => {
       attempts++;
       try {
-        const res = await fetch(`/api/payments/wallet`);
-        const data: WalletData = await res.json();
-        const txn = data.transactions.find((t) => t.status === "SUCCESS" || t.status === "FAILED");
+        const res = await fetch(`/api/payments/status/${apiRef}`);
+        if (!res.ok) return;
 
-        if (txn?.status === "SUCCESS") {
+        const data = await res.json();
+
+        if (data.status === "SUCCESS") {
           clearInterval(interval);
-          setWalletData(data);
+          fetchWallet();
           setStep("success");
-          toast("success", "Payment confirmed! 🎉", `KES ${amount} added to your wallet.`);
+          toast("success", "Payment confirmed! 🎉", `KES ${amtKES.toLocaleString()} added to your wallet.`);
           setTimeout(() => { setStep("form"); setAmount(""); }, 4000);
-        } else if (txn?.status === "FAILED" || attempts >= maxAttempts) {
+        } else if (data.status === "FAILED") {
           clearInterval(interval);
           setStep("failed");
-          toast("error", "Payment not confirmed", "Please check your M-Pesa messages and try again.");
+          toast("error", "Payment not confirmed", "Check your M-Pesa messages.");
+        } else if (attempts >= maxAttempts) {
+          clearInterval(interval);
+          setStep("failed");
+          toast("error", "Timeout", "Payment not confirmed within 2 minutes.");
         }
-      } catch { /* keep polling */ }
+      } catch { /* keep polling on network errors */ }
     }, 5000);
   };
 
