@@ -26,9 +26,11 @@ export async function POST(req: NextRequest) {
     // 3. Process (idempotent — safe if called multiple times)
     try {
         const result = await processIntaSendWebhook(payload)
-        console.info("[WEBHOOK] Processed:", result)
+        console.info("[WEBHOOK] Processed successfully:", JSON.stringify(result))
     } catch (error: any) {
+        // Log the FULL error so Vercel logs show exactly what went wrong
         console.error("[WEBHOOK] Processing error:", error?.message)
+        console.error("[WEBHOOK] Full error:", JSON.stringify(error, Object.getOwnPropertyNames(error)))
     }
 
     // 4. Always return 200 to acknowledge receipt

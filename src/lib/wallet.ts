@@ -106,8 +106,8 @@ async function debitWalletFallback(
 }
 
 /**
- * Credits a user's wallet atomically via Postgres RPC.
- * Creates a corresponding ledger entry.
+ * Credits a user's wallet atomically.
+ * Uses a Prisma transaction with row-level locking — no custom SQL functions needed.
  */
 export async function creditWallet(
     userId: string,
@@ -117,38 +117,13 @@ export async function creditWallet(
     description?: string
 ): Promise<WalletMutationResult> {
     const safeAmount = Math.trunc(amountCents)
-    try {
-        const result = await db.$queryRaw<
-            { new_balance: number; ledger_entry_id: string }[]
-        >(
-            Prisma.sql`SELECT * FROM credit_wallet(
-      ${userId}::text,
-      ${safeAmount}::int,
-      ${transactionId ? Prisma.sql`${transactionId}::uuid` : Prisma.sql`NULL::uuid`},
-      ${entryType}::text,
-      ${description ?? null}::text
-    )`
-        )
-
-        if (!result || result.length === 0) {
-            throw new Error(`credit_wallet returned no result for user ${userId}`)
-        }
-
-        return {
-            newBalance: result[0].new_balance,
-            ledgerEntryId: result[0].ledger_entry_id,
-        }
-    } catch (error) {
-        if (isMissingRpcFunctionError(error, "credit_wallet")) {
-            return creditWalletFallback(userId, safeAmount, transactionId, entryType, description)
-        }
-        throw error
-    }
+    return creditWalletFallback(userId, safeAmount, transactionId, entryType, description)
 }
 
 /**
- * Debits a user's wallet atomically via Postgres RPC.
- * Raises an exception if insufficient funds.
+ * Debits a user's wallet atomically.
+ * Uses a Prisma transaction with row-level locking — no custom SQL functions needed.
+ * Raises an error if insufficient funds.
  */
 export async function debitWallet(
     userId: string,
@@ -158,33 +133,7 @@ export async function debitWallet(
     description?: string
 ): Promise<WalletMutationResult> {
     const safeAmount = Math.trunc(amountCents)
-    try {
-        const result = await db.$queryRaw<
-            { new_balance: number; ledger_entry_id: string }[]
-        >(
-            Prisma.sql`SELECT * FROM debit_wallet(
-      ${userId}::text,
-      ${safeAmount}::int,
-      ${transactionId ? Prisma.sql`${transactionId}::uuid` : Prisma.sql`NULL::uuid`},
-      ${entryType}::text,
-      ${description ?? null}::text
-    )`
-        )
-
-        if (!result || result.length === 0) {
-            throw new Error(`debit_wallet returned no result for user ${userId}`)
-        }
-
-        return {
-            newBalance: result[0].new_balance,
-            ledgerEntryId: result[0].ledger_entry_id,
-        }
-    } catch (error) {
-        if (isMissingRpcFunctionError(error, "debit_wallet")) {
-            return debitWalletFallback(userId, safeAmount, transactionId, entryType, description)
-        }
-        throw error
-    }
+    return debitWalletFallback(userId, safeAmount, transactionId, entryType, description)
 }
 
 export interface EscrowLockResult {
