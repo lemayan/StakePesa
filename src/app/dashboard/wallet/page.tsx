@@ -151,7 +151,15 @@ export default function WalletPage() {
 
         if (data.status === "SUCCESS") {
           clearInterval(interval);
-          fetchWallet();
+          // Update balance immediately from the response, then do a full refresh
+          if (data.balanceCents !== undefined) {
+            setWalletData(prev => prev ? {
+              ...prev,
+              balanceCents: data.balanceCents,
+              balanceKES: data.balanceCents / 100,
+            } : prev);
+          }
+          fetchWallet(); // full refresh for transactions list
           setStep("success");
           toast("success", "Payment confirmed! 🎉", `KES ${amtKES.toLocaleString()} added to your wallet.`);
           setTimeout(() => { setStep("form"); setAmount(""); }, 4000);

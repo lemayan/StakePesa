@@ -82,6 +82,31 @@ export async function initiateSTKPush(
 }
 
 // ──────────────────────────────────────────────
+// INVOICE STATUS CHECK
+// Polls IntaSend directly — used when webhooks can't reach localhost.
+// Returns the current state of a payment invoice.
+// ──────────────────────────────────────────────
+
+export interface InvoiceStatus {
+    invoice_id: string
+    state: string       // "PENDING" | "PROCESSING" | "COMPLETE" | "FAILED"
+    value: number       // actual amount paid in KES
+    failed_reason: string | null
+    api_ref: string
+}
+
+/**
+ * Checks the status of an IntaSend invoice directly via the API.
+ * Use this when webhooks are not reachable (e.g. local dev without ngrok).
+ */
+export async function checkInvoiceStatus(invoiceId: string): Promise<InvoiceStatus> {
+    const client = getClient()
+    const collection = client.collection()
+    const result = await collection.status(invoiceId)
+    return result
+}
+
+// ──────────────────────────────────────────────
 // PAYOUT (WITHDRAWAL — B2C equivalent)
 // Sends money from StakePesa to user's M-Pesa.
 // ──────────────────────────────────────────────

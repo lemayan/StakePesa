@@ -1,0 +1,31 @@
+﻿
+=== IntaSend Transactions ===
+  [FAILED] DEPOSIT KES 100 | user: cmmz0okr | ref: c70251e2 | created: 2026-04-03T21:19:18.040Z
+  [FAILED] DEPOSIT KES 100 | user: cmmz0okr | ref: 172c118a | created: 2026-04-03T21:19:19.253Z
+  [FAILED] DEPOSIT KES 100 | user: cmmz0okr | ref: 0f52062a | created: 2026-04-03T21:19:50.721Z
+  [FAILED] DEPOSIT KES 100 | user: cmmz0okr | ref: 92313721 | created: 2026-04-03T21:20:19.646Z
+  [FAILED] DEPOSIT KES 100 | user: cmmz0okr | ref: acf9351c | created: 2026-04-03T21:21:16.759Z
+  [FAILED] DEPOSIT KES 10 | user: cmmz0okr | ref: 535fff37 | created: 2026-04-03T21:34:54.818Z
+  [SUCCESS] DEPOSIT KES 10 | user: cmmz0okr | ref: 1ed0a337 | created: 2026-04-03T21:34:54.818Z
+  [SUCCESS] DEPOSIT KES 10 | user: cmmz0okr | ref: 58bd0783 | created: 2026-04-03T21:56:58.158Z
+  [SUCCESS] DEPOSIT KES 10 | user: cmmz0okr | ref: fadcf982 | created: 2026-04-03T22:05:45.038Z
+  [FAILED] DEPOSIT KES 10 | user: cmmz0okr | ref: 17dc47ee | created: 2026-04-04T17:32:04.482Z
+  [PENDING] DEPOSIT KES 10 | user: cmmz0okr | ref: 0e228380 | created: 2026-04-04T20:12:25.356Z
+  [SUCCESS] DEPOSIT KES 10 | user: cmmz0okr | ref: 0e4e5b33 | created: 2026-04-04T20:12:25.423Z
+  [FAILED] WITHDRAWAL KES 30 | user: cmmz0okr | ref: 669d4700 | created: 2026-04-04T20:13:24.383Z
+
+=== Wallets ===
+  user: cmmz0okr | balance: KES 30
+
+=== Ledger Entries ===
+  [CREDIT] KES 30 ΓåÆ balanceAfter: KES 30 | user: cmmz0okr | Retroactive balance repair ΓÇö FK bug fix (2026-04-04T20:11:01.364Z)
+  [DEBIT] KES 30 ΓåÆ balanceAfter: KES 0 | user: cmmz0okr | Withdrawal request (ref: 669d4700)
+  [CREDIT] KES 30 ΓåÆ balanceAfter: KES 30 | user: cmmz0okr | Withdrawal refund ΓÇö payout initiation failed
+
+=== Balance Audit ===
+  user: cmmz0okr
+    Total deposited (SUCCESS txns): KES 40
+    Total withdrawn (SUCCESS txns): KES 0
+    Expected balance: KES 40
+    Actual wallet.balance: KES 30
+    ΓÜá∩╕Å  DISCREPANCY: KES 10 needs to be credited

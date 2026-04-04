@@ -186,11 +186,12 @@ export async function processIntaSendWebhook(
         })
 
         // Credit wallet OUTSIDE Prisma transaction (uses row lock)
+        // NOTE: transactionId is a FK to MpesaTransaction — pass undefined for IntaSend txns
         if (txn.type === "DEPOSIT") {
             await creditWallet(
                 txn.userId,
                 txn.amountCents,
-                txn.id,
+                undefined,
                 "CREDIT",
                 `M-Pesa deposit via IntaSend (ref: ${(apiRef ?? invoiceId ?? "").slice(0, 8)})`
             )
@@ -223,11 +224,12 @@ export async function processIntaSendWebhook(
         })
 
         // If a withdrawal failed, refund the user
+        // NOTE: transactionId is a FK to MpesaTransaction — pass undefined for IntaSend txns
         if (txn.type === "WITHDRAWAL") {
             await creditWallet(
                 txn.userId,
                 txn.amountCents,
-                txn.id,
+                undefined,
                 "CREDIT",
                 `Withdrawal refund — IntaSend payout failed`
             )
