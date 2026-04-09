@@ -453,7 +453,7 @@ export default function MarketDetailPage() {
                     <button className="px-2 py-0.5 rounded hover:bg-bg-above transition-all">24H</button>
                   </div>
                 </div>
-                <div className="h-[200px]">
+                <div className="h-[140px] sm:h-[200px]">
                   <OddsChart data={market.trend} color={market.odds >= 50 ? "#22c55e" : "#ef4444"} />
                 </div>
                 <div className="flex justify-between text-[10px] font-mono text-fg-muted mt-2">

@@ -166,8 +166,8 @@ export default function CreateChallengePage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Create Private P2P Challenge</h1>
           <p className="text-sm text-fg-secondary mt-1">Define challenge terms, set individual stakes, and choose how outcomes are verified.</p>
-        </div>
-        <Link href="/dashboard" className="text-[13px] font-mono text-fg-muted hover:text-fg">Back to Dashboard</Link>
+        </div> <Link href="/dashboard" className="text-[13px] font-mono text-fg-muted hover:text-fg">Back to Dashboard</Link
+       >
       </div>
 
       <div className="grid grid-cols-3 gap-2">

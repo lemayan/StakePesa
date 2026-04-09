@@ -139,7 +139,7 @@ function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: O
   
   return (
     <div 
-      className="relative w-full h-[300px] flex flex-col justify-end"
+      className="relative w-full h-[100px] sm:h-[220px] md:h-[300px] flex flex-col justify-end"
       onMouseLeave={() => setActiveHover(null)}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -150,10 +150,10 @@ function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: O
       }}
     >
       {/* Y-axis grid lines (dashed) */}
-      <div className="absolute inset-0 right-[40px] pointer-events-none flex flex-col justify-between py-[20px] pb-[40px]">
+      <div className="absolute inset-0 right-[40px] pointer-events-none flex flex-col justify-between py-[10px] sm:py-[20px] pb-[20px] sm:pb-[40px]">
         {[40, 30, 20, 10, 0].map((val, i) => (
           <div key={i} className="relative w-full border-t border-line border-dashed opacity-20 h-0">
-            <span className="absolute -right-[36px] -top-[8px] text-[10px] font-mono text-fg-muted">{val}%</span>
+            <span className="absolute -right-[36px] -top-[8px] text-[10px] font-mono text-fg-muted hidden sm:block">{val}%</span>
           </div>
         ))}
       </div>
@@ -223,7 +223,7 @@ function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: O
       )}
 
       {/* X-axis labels */}
-      <div className="absolute bottom-0 left-[10px] right-[40px] flex justify-between text-[11px] font-mono text-fg-muted">
+      <div className="absolute bottom-0 left-[10px] right-[40px] hidden sm:flex justify-between text-[11px] font-mono text-fg-muted">
         {months.map(m => <span key={m}>{m}</span>)}
       </div>
     </div>
@@ -319,7 +319,7 @@ export function Hero() {
       <div className="grid lg:grid-cols-[1fr_1fr] min-h-[auto] lg:min-h-[760px]">
         
         {/* LEFT — Headline + CTA */}
-        <div className="relative p-5 sm:p-8 md:p-12 lg:p-16 flex flex-col justify-center lg:justify-start lg:pt-20 overflow-hidden">
+        <div className="relative px-4 py-8 sm:p-8 md:p-12 lg:p-16 pb-4 sm:pb-8 flex flex-col justify-center lg:justify-start lg:pt-16 overflow-hidden">
           <div className="absolute inset-0 bg-grid opacity-[0.03]" />
 
           <motion.h1
@@ -345,11 +345,11 @@ export function Hero() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.6 }}
-            className="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-7 sm:mt-9"
+            className="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-6 sm:mt-9"
           >
             <Link
               href="/signup"
-              className="h-12 px-7 text-[15px] sm:text-[16px] font-semibold bg-green text-white rounded flex items-center justify-center hover:opacity-90 transition-opacity duration-200"
+              className="h-11 sm:h-12 px-7 text-[15px] sm:text-[16px] font-semibold bg-green text-white rounded flex items-center justify-center hover:opacity-90 transition-opacity duration-200"
             >
               Start Trading Now
               <svg className="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -362,7 +362,7 @@ export function Hero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.9 }}
-            className="relative grid grid-cols-3 gap-4 sm:flex sm:items-center sm:gap-6 mt-8 sm:mt-12 font-mono text-fg-muted"
+            className="relative flex justify-center sm:justify-start items-center gap-8 sm:gap-6 mt-8 sm:mt-12 font-mono text-fg-muted text-center sm:text-left"
           >
             <div>
               <AnimatedCounter target={12000} prefix="" suffix="+" className="text-fg font-bold text-[22px] sm:text-[28px] block tabular-nums" />
@@ -377,30 +377,30 @@ export function Hero() {
         </div>
 
         {/* RIGHT — Theme-Adaptive Kalshi Style Market Card component */}
-        <div className="flex items-center lg:items-start justify-center p-4 lg:p-6 lg:pt-16">
+        <div className="flex items-center lg:items-start justify-center p-3 sm:p-4 lg:p-6 lg:pt-16 perspective-1000">
           {/* Card Container */}
           <motion.div 
             key={market.id}
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.4 }}
-            className="w-full max-w-[900px] min-h-[460px] bg-bg border border-line rounded-[14px] shadow-2xl p-8 relative overflow-hidden flex flex-col"
+            initial={{ opacity: 0, scale: 0.98, y: 10, rotateX: 2 }}
+            animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="w-full max-w-[900px] md:min-h-[460px] bg-bg/80 backdrop-blur-xl border border-line rounded-[16px] sm:rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] p-4 sm:p-6 lg:p-8 relative overflow-hidden flex flex-col"
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-[24px] sm:text-[28px] font-bold leading-tight pr-4 text-fg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 lg:mb-8 gap-3 sm:gap-4">
+              <h2 className="text-[18px] sm:text-[22px] lg:text-[26px] font-bold leading-snug sm:leading-tight pr-0 sm:pr-4 text-fg line-clamp-3 sm:line-clamp-none">
                 {market.title}
               </h2>
-              <div className="flex items-center gap-3 shrink-0">
-                <button onClick={prevMarket} className="w-8 h-8 rounded-full bg-fg/5 hover:bg-fg/10 flex items-center justify-center transition border border-line">
+              <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 self-start sm:self-auto bg-line/20 sm:bg-transparent rounded-full p-1 sm:p-0 pointer-events-auto">
+                <button onClick={prevMarket} className="w-8 h-8 rounded-full bg-bg shadow-sm sm:shadow-none sm:bg-fg/5 hover:bg-fg/10 flex items-center justify-center transition sm:border border-line">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-fg-secondary">
                     <path d="M15 18l-6-6 6-6"/>
                   </svg>
                 </button>
-                <span className="text-[14px] font-medium text-fg-muted w-12 text-center">
-                  {marketIdx + 1} of {trendingMarkets.length}
+                <span className="text-[12px] sm:text-[14px] font-medium text-fg-muted w-10 sm:w-12 text-center pointer-events-none tracking-wide">
+                  {marketIdx + 1}<span className="opacity-50">/</span>{trendingMarkets.length}
                 </span>
-                <button onClick={nextMarket} className="w-8 h-8 rounded-full bg-fg/5 hover:bg-fg/10 flex items-center justify-center transition border border-line">
+                <button onClick={nextMarket} className="w-8 h-8 rounded-full bg-bg shadow-sm sm:shadow-none sm:bg-fg/5 hover:bg-fg/10 flex items-center justify-center transition sm:border border-line">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-fg-secondary">
                     <path d="M9 18l6-6-6-6"/>
                   </svg>
@@ -409,18 +409,18 @@ export function Hero() {
             </div>
 
             {/* Split Content Body */}
-            <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-8 border-t border-line/50 pt-6">
+            <div className="flex flex-col md:grid md:grid-cols-[240px_1fr] lg:grid-cols-[260px_1fr] gap-4 lg:gap-8 border-t border-line/50 pt-4 lg:pt-6">
               
               {/* Left Col: Outcomes & Volume */}
               <div className="flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between text-[11px] font-medium text-fg-muted mb-3 px-1 uppercase tracking-wider">
+                  <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-medium text-fg-muted mb-2 sm:mb-3 px-1 uppercase tracking-wider">
                     <span>Market</span>
-                    <span className="flex-1 text-center pl-4">Pays out</span>
+                    <span className="flex-1 text-center pl-2 sm:pl-4">Pays out</span>
                     <span>Odds</span>
                   </div>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5 sm:gap-3">
                     {market.outcomes.map((outcome, idx) => (
                       <div 
                         key={outcome.id} 
@@ -440,8 +440,8 @@ export function Hero() {
                                 imageSource={imgData?.imageSource as any ?? null}
                                 imageVerified={imgData?.imageVerified ?? false}
                                 imageShape={imgData?.imageShape ?? null}
-                                size={32}
-                                className="shrink-0 shadow-lg"
+                                size={28}
+                                className="shrink-0 shadow-sm sm:shadow-lg sm:w-[32px] sm:h-[32px] w-[28px] h-[28px]"
                               />
                             );
                           })()}
@@ -452,28 +452,31 @@ export function Hero() {
                             const isNo = lower === "no";
                             if (isYes || isNo) return null;
                             return (
-                              <span className="text-[15px] font-semibold text-fg-secondary truncate max-w-[85px] group-hover:text-fg transition">
-                                {outcome.name}
-                              </span>
+                              <div className="flex flex-col items-start pt-1">
+                                <span className="text-[15px] font-medium text-fg-secondary truncate max-w-[120px] group-hover:text-fg transition">
+                                  {outcome.name}
+                                </span>
+                                <div className="h-[2px] w-6 mt-0.5 rounded-full" style={{ backgroundColor: outcome.color }} />
+                              </div>
                             );
                           })()}
 
                         </div>
 
                         {/* Payout */}
-                        <span className="text-[13px] font-mono text-fg-muted flex-1 text-center">
+                        <span className="text-[13px] font-mono font-medium text-fg-secondary flex-1 text-right pr-4 sm:pr-8">
                           {outcome.payout}
                         </span>
 
                         {/* Odds Pill */}
                         <div 
-                          className="px-3 py-1.5 rounded-full border flex items-center justify-center transition-colors shadow-sm dark:shadow-none bg-fg/5 dark:bg-transparent"
+                          className="px-3 py-1.5 sm:px-4 sm:py-1.5 rounded-[999px] border flex items-center justify-center transition-colors dark:bg-transparent"
                           style={{
-                            borderColor: `${outcome.color}40`,
-                            backgroundColor: activeHover !== null && activeHover === idx ? `${outcome.color}25` : undefined
+                            borderColor: outcome.color,
+                            backgroundColor: activeHover !== null && activeHover === idx ? `${outcome.color}15` : undefined
                           }}
                         >
-                          <span className="text-[15px] font-bold font-mono" style={{ color: outcome.color }}>
+                          <span className="text-[14px] font-bold text-fg">
                             {activeHover !== null ? outcome.history[activeHover].toFixed(0) : outcome.odds}%
                           </span>
                         </div>
@@ -482,21 +485,25 @@ export function Hero() {
                   </div>
                 </div>
 
-                <div className="mt-8">
-                  <p className="text-[14px] font-bold text-fg-secondary mb-1">
-                    KES {market.volume} <span className="text-[12px] font-normal text-fg-muted">vol</span>
-                  </p>
-                  <p className="text-[12px] font-normal text-fg-muted leading-snug">
-                    <span className="text-fg-secondary font-semibold">News &bull; </span>
+                <div className="mt-5 pt-3">
+                  <div className="flex items-center justify-between text-[12px] font-medium text-fg-secondary mb-3">
+                    <p>KES {market.volume} vol</p>
+                    <p>{parseInt(market.volume.replace(/,/g, '')) % 100 + 40} markets</p>
+                  </div>
+
+                  <div className="w-full h-px border-t border-dashed border-line/50 mb-3" />
+
+                  <p className="text-[13px] font-normal text-fg-muted leading-snug line-clamp-3">
+                    <span className="text-fg-secondary font-bold">News &bull; </span>
                     {market.news.replace("News · ", "")}
                   </p>
                 </div>
               </div>
 
-              {/* Right Col: Interactive Chart */}
-              <div className="relative pt-2">
+              {/* Right Col: Interactive Chart (Hidden on Mobile) */}
+              <div className="relative hidden md:block pt-0 sm:pt-2">
                 {/* Legend top row */}
-                <div className="absolute top-0 left-0 right-0 flex items-center flex-wrap gap-x-4 gap-y-2 mb-4 z-10 px-2">
+                <div className="absolute top-0 left-0 right-0 hidden sm:flex items-center flex-wrap gap-x-4 gap-y-2 mb-4 z-10 px-2">
                   {market.outcomes.map(o => (
                     <div key={o.id} className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full" style={{ background: o.color }} />
