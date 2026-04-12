@@ -1,15 +1,22 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 const domain = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const year = new Date().getFullYear();
 
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-    },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Fire-and-forget send helper — wraps Resend so all send sites stay consistent
+async function sendEmail(to: string, subject: string, html: string): Promise<void> {
+    const { error } = await resend.emails.send({
+        from: "StakePesa <onboarding@resend.dev>",
+        to,
+        subject,
+        html,
+    });
+    if (error) {
+        console.error("[mail] Resend error:", error);
+    }
+}
 
 // ─────────────────────────────────────────────────────────────
 // SHARED HTML HELPERS
@@ -267,17 +274,8 @@ export const sendWelcomeEmail = async (
 </body>
 </html>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: email,
-            subject: `🎉 Welcome to StakePesa, ${username}! Your account is ready`,
-            html,
-        });
-        console.log(`[mail] Welcome email sent to ${email}`);
-    } catch (error) {
-        console.error("[mail] Failed to send welcome email:", error);
-    }
+    await sendEmail(email, `🎉 Welcome to StakePesa, ${username}! Your account is ready`, html);
+    console.log(`[mail] Welcome email sent to ${email}`);
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -307,16 +305,7 @@ export const sendVerificationEmail = async (email: string, token: string): Promi
         </p>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: email,
-            subject: "Verify your email — StakePesa",
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send verification email:", error);
-    }
+    await sendEmail(email, "Verify your email — StakePesa", emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -373,16 +362,7 @@ export const sendChallengeCreatedEmail = async (
         </div>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: creatorEmail,
-            subject: `✅ Challenge created: "${challenge.title}" — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send challenge created email:", error);
-    }
+    await sendEmail(creatorEmail, `✅ Challenge created: "${challenge.title}" — StakePesa`, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -436,16 +416,7 @@ export const sendChallengeInvitationEmail = async (
         </p>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: inviteeEmail,
-            subject: `🎯 ${inviterName} challenged you: "${challenge.title}" — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send invitation email:", error);
-    }
+    await sendEmail(inviteeEmail, `🎯 ${inviterName} challenged you: "${challenge.title}" — StakePesa`, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -480,16 +451,7 @@ export const sendInvitationAcceptedEmail = async (
         </div>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: creatorEmail,
-            subject: `🤝 ${acceptorName} accepted your challenge — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send invitation accepted email:", error);
-    }
+    await sendEmail(creatorEmail, `🤝 ${acceptorName} accepted your challenge — StakePesa`, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -530,16 +492,7 @@ export const sendChallengeActiveEmail = async (
         </div>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: participantEmail,
-            subject: `🔥 Challenge is now live: "${challenge.title}" — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send challenge active email:", error);
-    }
+    await sendEmail(participantEmail, `🔥 Challenge is now live: "${challenge.title}" — StakePesa`, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -592,18 +545,10 @@ export const sendChallengeResolvedEmail = async (
         }
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: participantEmail,
-            subject: didWin
-                ? `🏆 You won "${challenge.title}"! — StakePesa`
-                : `Challenge resolved: "${challenge.title}" — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send challenge resolved email:", error);
-    }
+    const subject = didWin
+        ? `🏆 You won "${challenge.title}"! — StakePesa`
+        : `Challenge resolved: "${challenge.title}" — StakePesa`;
+    await sendEmail(participantEmail, subject, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -647,16 +592,7 @@ export const sendDisputeRaisedEmail = async (
         </div>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: notifyEmail,
-            subject: `⚠️ Dispute raised on "${challenge.title}" — StakePesa`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send dispute email:", error);
-    }
+    await sendEmail(notifyEmail, `⚠️ Dispute raised on "${challenge.title}" — StakePesa`, emailWrapper(body));
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -696,14 +632,5 @@ export const sendDepositConfirmedEmail = async (
         </div>
       </td></tr>`;
 
-    try {
-        await transporter.sendMail({
-            from: `"StakePesa" <${process.env.GMAIL_USER}>`,
-            to: userEmail,
-            subject: `💰 ${formatKes(amountCents)} deposited to your StakePesa wallet`,
-            html: emailWrapper(body),
-        });
-    } catch (error) {
-        console.error("[mail] Failed to send deposit confirmed email:", error);
-    }
+    await sendEmail(userEmail, `💰 ${formatKes(amountCents)} deposited to your StakePesa wallet`, emailWrapper(body));
 };
