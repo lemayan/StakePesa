@@ -173,26 +173,8 @@ export function Sidebar() {
                   active ? "text-green" : "text-fg-muted"
                 }`}
               >
-                {/* Active background behind icon */}
-                {active && (
-                  <motion.div
-                    layoutId="mobile-tab-glow"
-                    className="absolute inset-x-1 top-1 bottom-1 rounded-xl bg-green/10"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-
-                {/* Top indicator bar */}
-                {active && (
-                  <motion.div
-                    layoutId="mobile-tab-bar"
-                    className="absolute top-0 left-3 right-3 h-[2px] rounded-b-full bg-green"
-                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-
                 <svg
-                  className="relative w-[22px] h-[22px]"
+                  className="w-[22px] h-[22px]"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -200,7 +182,7 @@ export function Sidebar() {
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
                 </svg>
-                <span className={`relative font-medium ${active ? "font-semibold" : ""}`}>
+                <span className={`font-medium ${active ? "font-semibold" : ""}`}>
                   {item.label}
                 </span>
               </Link>
