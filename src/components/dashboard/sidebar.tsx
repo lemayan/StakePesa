@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 
@@ -143,53 +142,34 @@ export function Sidebar() {
       </aside>
 
       {/* ── Mobile bottom tab bar ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg/95 backdrop-blur-md border-t border-line flex flex-col items-stretch pb-[env(safe-area-inset-bottom)]">
-        {/* Swipe position dots */}
-        <div className="flex justify-center gap-1.5 pt-1.5">
-          {nav.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <div
-                key={item.href}
-                className={`rounded-full transition-all duration-300 ${
-                  active
-                    ? "w-4 h-[3px] bg-green"
-                    : "w-[3px] h-[3px] bg-fg-muted/40"
-                }`}
-              />
-            );
-          })}
-        </div>
-
-        {/* Tab items */}
-        <div className="h-14 flex items-center justify-around px-1">
-          {nav.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] transition-colors ${
-                  active ? "text-green" : "text-fg-muted"
-                }`}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg/95 backdrop-blur-md border-t border-line h-16 flex items-center justify-around px-1 pb-[env(safe-area-inset-bottom)]">
+        {nav.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] transition-colors ${
+                active ? "text-green" : "text-fg-muted"
+              }`}
+            >
+              <svg
+                className="w-[22px] h-[22px]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={active ? 2 : 1.5}
               >
-                <svg
-                  className="w-[22px] h-[22px]"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={active ? 2 : 1.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                </svg>
-                <span className={`font-medium ${active ? "font-semibold" : ""}`}>
-                  {item.label}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
+                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+              </svg>
+              <span className={`font-medium ${active ? "font-semibold" : ""}`}>
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </nav>
+
     </>
   );
 }
