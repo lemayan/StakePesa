@@ -7,6 +7,14 @@ import { getFundingPayoutPolicy, getInvitationAcceptancePlan } from "@/lib/chall
 import { DepositStatus, VerificationMethod } from "@prisma/client";
 import markets from "@/data/markets.json";
 import { z } from "zod";
+import {
+  sendChallengeCreatedEmail,
+  sendChallengeInvitationEmail,
+  sendInvitationAcceptedEmail,
+  sendChallengeActiveEmail,
+  sendChallengeResolvedEmail,
+  sendDisputeRaisedEmail,
+} from "@/lib/mail";
 
 type CompatDelegate = {
   findUnique<T = unknown>(args: unknown): Promise<T>;
@@ -468,6 +476,49 @@ export async function createChallengeAction(input: z.infer<typeof createChalleng
     return { error: "Unable to lock challenge funds. Challenge was cancelled. Please try again." };
   }
 
+  // ── Fire-and-forget email notifications ──
+  // Note: totalPoolCents already computed above (line ~383)
+
+  void sendChallengeCreatedEmail(
+    session.user.email,
+    session.user.name ?? session.user.email,
+    {
+      id: created.id,
+      title: data.title,
+      description: data.description,
+      endDate: endDate.toISOString(),
+      stakeAmountCents: creatorLockAmount,
+      totalPoolCents,
+      participantCount: totalParticipants,
+      fundingMode: data.fundingMode,
+    }
+  );
+
+  // Fetch the created invitations to get their IDs
+  const createdInvitations = await db.challengeInvitation.findMany({
+    where: { challengeId: created.id },
+    select: { id: true, email: true, stakeAmount: true },
+  });
+
+  for (const invite of createdInvitations) {
+    void sendChallengeInvitationEmail(
+      invite.email,
+      session.user.name ?? session.user.email,
+      {
+        id: created.id,
+        title: data.title,
+        description: data.description,
+        endDate: endDate.toISOString(),
+        stakeAmountCents: data.creatorStakeAmount,
+        totalPoolCents,
+        participantCount: totalParticipants,
+        fundingMode: data.fundingMode,
+      },
+      invite.id,
+      invite.stakeAmount
+    );
+  }
+
   return { success: "Challenge created and invitations sent.", challengeId: created.id };
 }
 
@@ -581,6 +632,59 @@ export async function acceptChallengeInvitationAction(invitationId: string) {
     return { pendingInvites, confirmedParticipants };
   });
 
+  // ── Fire-and-forget email notifications ──
+  // Fetch the full challenge for email data
+  const fullChallenge = await db.challenge.findUnique({
+    where: { id: invitation.challengeId },
+    select: {
+      id: true,
+      title: true,
+      endDate: true,
+      fundingMode: true,
+      creator: { select: { email: true, name: true } },
+      participants: {
+        where: { depositStatus: "CONFIRMED" },
+        select: { amount: true, user: { select: { email: true, name: true } } },
+      },
+    },
+  });
+
+  if (fullChallenge) {
+    const emailPoolCents = fullChallenge.participants.reduce((sum, p) => sum + p.amount, 0);
+    const challengeData = {
+      id: fullChallenge.id,
+      title: fullChallenge.title,
+      endDate: fullChallenge.endDate.toISOString(),
+      totalPoolCents: emailPoolCents,
+      stakeAmountCents: invitation.stakeAmount,
+      participantCount: fullChallenge.participants.length,
+      fundingMode: fullChallenge.fundingMode,
+    };
+
+    // Notify creator that someone accepted
+    if (fullChallenge.creator.email) {
+      void sendInvitationAcceptedEmail(
+        fullChallenge.creator.email,
+        fullChallenge.creator.name ?? fullChallenge.creator.email,
+        session.user.name ?? session.user.email ?? "A participant",
+        challengeData
+      );
+    }
+
+    // If challenge just became active, notify all participants
+    if (result.pendingInvites === 0) {
+      for (const participant of fullChallenge.participants) {
+        if (participant.user.email) {
+          void sendChallengeActiveEmail(
+            participant.user.email,
+            participant.user.name ?? participant.user.email,
+            challengeData
+          );
+        }
+      }
+    }
+  }
+
   return {
     success:
       result.pendingInvites === 0
@@ -647,6 +751,31 @@ export async function raiseDisputeAction(input: z.infer<typeof disputeSchema>) {
       },
     });
   });
+
+  // ── Fire-and-forget dispute email ──
+  const disputeChallenge = await db.challenge.findUnique({
+    where: { id: parsed.data.challengeId },
+    select: {
+      id: true,
+      title: true,
+      referee: { select: { email: true, name: true } },
+      creator: { select: { email: true, name: true } },
+    },
+  });
+
+  if (disputeChallenge) {
+    const raisedByName = session.user.name ?? session.user.email ?? "A participant";
+    const notifyTarget = disputeChallenge.referee ?? disputeChallenge.creator;
+    if (notifyTarget?.email) {
+      void sendDisputeRaisedEmail(
+        notifyTarget.email,
+        notifyTarget.name ?? notifyTarget.email,
+        raisedByName,
+        { id: disputeChallenge.id, title: disputeChallenge.title },
+        parsed.data.reason
+      );
+    }
+  }
 
   return {
     success: challenge.refereeId
@@ -773,6 +902,38 @@ export async function submitVerificationVoteAction(input: z.infer<typeof voteVer
   }
 
   if (outcome === "RESOLVED") {
+    // ── Fire-and-forget resolution emails ──
+    const resolvedChallenge = await db.challenge.findUnique({
+      where: { id: parsed.data.challengeId },
+      select: {
+        id: true,
+        title: true,
+        resolutionNotes: true,
+        participants: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    });
+
+    if (resolvedChallenge) {
+      const totalPoolCents = resolvedChallenge.participants.reduce((sum, p) => sum + p.amount, 0);
+      // In mutual verification: current voter (APPROVE) is considered the winner
+      // For now, the creator is the winner — a more advanced payout policy can refine this
+      for (const participant of resolvedChallenge.participants) {
+        if (participant.user.email) {
+          const isWinner = participant.userId === session.user.id;
+          void sendChallengeResolvedEmail(
+            participant.user.email,
+            participant.user.name ?? participant.user.email,
+            { id: resolvedChallenge.id, title: resolvedChallenge.title, totalPoolCents },
+            isWinner,
+            isWinner ? totalPoolCents : 0,
+            resolvedChallenge.resolutionNotes
+          );
+        }
+      }
+    }
+
     return { success: "Verification submitted. Challenge is now resolved." };
   }
 

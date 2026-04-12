@@ -143,39 +143,78 @@ export function Sidebar() {
       </aside>
 
       {/* ── Mobile bottom tab bar ── */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg/95 backdrop-blur-md border-t border-line h-16 flex items-center justify-around px-1 pb-[env(safe-area-inset-bottom)]">
-        {nav.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] transition-colors ${
-                active ? "text-green" : "text-fg-muted"
-              }`}
-            >
-              {active && (
-                <motion.div
-                  layoutId="mobile-tab"
-                  className="absolute top-0 left-3 right-3 h-[2px] bg-green rounded-b"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-              )}
-              <svg
-                className="w-[22px] h-[22px]"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={active ? 2 : 1.5}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-bg/95 backdrop-blur-md border-t border-line flex flex-col items-stretch pb-[env(safe-area-inset-bottom)]">
+        {/* Swipe position dots */}
+        <div className="flex justify-center gap-1.5 pt-1.5">
+          {nav.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <div
+                key={item.href}
+                className={`rounded-full transition-all duration-300 ${
+                  active
+                    ? "w-4 h-[3px] bg-green shadow-[0_0_6px_1px_rgba(34,197,94,0.7)]"
+                    : "w-[3px] h-[3px] bg-fg-muted/40"
+                }`}
+              />
+            );
+          })}
+        </div>
+
+        {/* Tab items */}
+        <div className="h-14 flex items-center justify-around px-1">
+          {nav.map((item) => {
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full text-[10px] transition-colors ${
+                  active ? "text-green" : "text-fg-muted"
+                }`}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-              </svg>
-              <span className={`font-medium ${active ? "font-semibold" : ""}`}>
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+                {/* Green glow bubble behind active icon */}
+                {active && (
+                  <motion.div
+                    layoutId="mobile-tab-glow"
+                    className="absolute inset-x-1 top-1 bottom-1 rounded-xl bg-green/10"
+                    style={{
+                      boxShadow: "0 0 18px 4px rgba(34,197,94,0.18)",
+                    }}
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+
+                {/* Top indicator bar */}
+                {active && (
+                  <motion.div
+                    layoutId="mobile-tab-bar"
+                    className="absolute top-0 left-3 right-3 h-[2px] rounded-b-full bg-green"
+                    style={{
+                      boxShadow: "0 0 8px 2px rgba(34,197,94,0.6)",
+                    }}
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+
+                <svg
+                  className={`relative w-[22px] h-[22px] transition-all duration-200 ${
+                    active ? "drop-shadow-[0_0_6px_rgba(34,197,94,0.8)]" : ""
+                  }`}
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={active ? 2 : 1.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span className={`relative font-medium ${active ? "font-semibold" : ""}`}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </>
   );

@@ -4,7 +4,7 @@ import { signIn } from "@/auth"
 import { db } from "@/lib/db"
 import bcrypt from "bcryptjs"
 import { generateVerificationToken } from "@/lib/tokens"
-import { sendVerificationEmail } from "@/lib/mail"
+import { sendVerificationEmail, sendWelcomeEmail } from "@/lib/mail"
 
 /* ─────────────────────────────────────────────
    LOGIN
@@ -133,9 +133,12 @@ export async function signupAction(formData: FormData) {
             },
         })
 
-        // Generate token & send email
+        // Generate token & send verification email
         const verificationToken = await generateVerificationToken(email)
         await sendVerificationEmail(verificationToken.identifier, verificationToken.token)
+
+        // Fire-and-forget animated welcome email
+        void sendWelcomeEmail(email, username)
 
         return { success: "Confirmation email sent! Please check your inbox." }
     } catch {

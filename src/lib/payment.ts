@@ -9,6 +9,7 @@ import {
     extractCallbackMetadata,
     type MpesaCallbackPayload,
 } from "@/lib/validators"
+import { sendDepositConfirmedEmail } from "@/lib/mail"
 
 // ──────────────────────────────────────────────
 // PAYMENT SERVICE
@@ -380,6 +381,20 @@ export async function processCallback(
                 "CREDIT",
                 `M-Pesa deposit (Receipt: ${metadata.mpesaReceiptNumber})`
             )
+
+            // Send deposit confirmed email (fire-and-forget)
+            const userRecord = await db.user.findUnique({
+                where: { id: transaction.userId },
+                select: { email: true, name: true },
+            })
+            if (userRecord?.email) {
+                void sendDepositConfirmedEmail(
+                    userRecord.email,
+                    userRecord.name ?? userRecord.email,
+                    transaction.amount,
+                    metadata.mpesaReceiptNumber ?? null
+                )
+            }
         }
     } else {
         // ── FAILURE PATH ──
@@ -513,6 +528,22 @@ export async function checkTransactionByQuery(
                     ? "Phone verification refund (KES 1)"
                     : "M-Pesa deposit (via status check)"
             )
+
+            // Send deposit confirmed email for deposits (fire-and-forget)
+            if (transaction.type === TransactionType.DEPOSIT) {
+                const userRecord = await db.user.findUnique({
+                    where: { id: transaction.userId },
+                    select: { email: true, name: true },
+                })
+                if (userRecord?.email) {
+                    void sendDepositConfirmedEmail(
+                        userRecord.email,
+                        userRecord.name ?? userRecord.email,
+                        transaction.amount,
+                        null
+                    )
+                }
+            }
         }
 
         return { processed: true, transactionId: transaction.id }
