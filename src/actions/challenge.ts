@@ -7,6 +7,7 @@ import { getFundingPayoutPolicy, getInvitationAcceptancePlan } from "@/lib/chall
 import { DepositStatus, VerificationMethod } from "@prisma/client";
 import markets from "@/data/markets.json";
 import { z } from "zod";
+import { unstable_cache } from "next/cache";
 import {
   sendChallengeCreatedEmail,
   sendChallengeInvitationEmail,
@@ -1396,60 +1397,72 @@ export async function getMyChallengeDashboardData(): Promise<MyChallengeDashboar
     };
   }
 
+  const userId = session.user.id;
+  const userEmail = session.user.email ?? "";
+
+  // Run dispute forfeit check outside the cache so it's always fresh
   await enforceDisputeForfeitPolicy();
 
-  const challengeRows = await prismaDb.challenge.findMany({
-    where: {
-      OR: [
-        { creatorId: session.user.id },
-        { participants: { some: { userId: session.user.id } } },
-        {
-          invitations: {
-            some: {
-              OR: [
-                { invitedUserId: session.user.id },
-                ...(session.user.email ? [{ email: session.user.email }] : []),
-              ],
+  // Cached fetch keyed per user — revalidates every 30s or on explicit mutation
+  const fetchCached = unstable_cache(
+    async () => {
+      const challengeRows = await prismaDb.challenge.findMany({
+        where: {
+          OR: [
+            { creatorId: userId },
+            { participants: { some: { userId } } },
+            {
+              invitations: {
+                some: {
+                  OR: [
+                    { invitedUserId: userId },
+                    ...(userEmail ? [{ email: userEmail }] : []),
+                  ],
+                },
+              },
             },
+          ],
+        },
+        include: {
+          creator: { select: { id: true, name: true, email: true } },
+          referee: { select: { id: true, name: true, email: true } },
+          participants: {
+            include: { user: { select: { id: true, name: true, email: true } } },
+            orderBy: { joinedAt: "asc" },
+          },
+          invitations: { orderBy: { createdAt: "asc" } },
+          disputes: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { raisedBy: { select: { id: true, name: true, email: true } } },
           },
         },
-      ],
-    },
-    include: {
-      creator: { select: { id: true, name: true, email: true } },
-      referee: { select: { id: true, name: true, email: true } },
-      participants: {
-        include: { user: { select: { id: true, name: true, email: true } } },
-        orderBy: { joinedAt: "asc" },
-      },
-      invitations: {
-        orderBy: { createdAt: "asc" },
-      },
-      disputes: {
+        orderBy: { updatedAt: "desc" },
+      }) as ChallengeRow[];
+
+      const pendingInvitations = await prismaDb.challengeInvitation.findMany({
+        where: {
+          status: "PENDING",
+          OR: [
+            { invitedUserId: userId },
+            ...(userEmail ? [{ email: userEmail }] : []),
+          ],
+        },
+        include: {
+          challenge: { select: { id: true, title: true, status: true } },
+          invitedBy: { select: { id: true, name: true, email: true } },
+        },
         orderBy: { createdAt: "desc" },
-        take: 1,
-        include: { raisedBy: { select: { id: true, name: true, email: true } } },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  }) as ChallengeRow[];
+      }) as Array<ChallengeInvitationRecord & { challenge: { id: string; title: string; status: ChallengeStatusValue }; invitedBy: UserLite }>;
 
-  const cards = challengeRows.map((row) => challengeToCard(row, session.user.id));
+      return { challengeRows, pendingInvitations };
+    },
+    [`dashboard-data-${userId}`],
+    { revalidate: 30, tags: [`dashboard-${userId}`] }
+  );
 
-  const pendingInvitations = await prismaDb.challengeInvitation.findMany({
-    where: {
-      status: "PENDING",
-      OR: [
-        { invitedUserId: session.user.id },
-        ...(session.user.email ? [{ email: session.user.email }] : []),
-      ],
-    },
-    include: {
-      challenge: { select: { id: true, title: true, status: true } },
-      invitedBy: { select: { id: true, name: true, email: true } },
-    },
-    orderBy: { createdAt: "desc" },
-  }) as Array<ChallengeInvitationRecord & { challenge: { id: string; title: string; status: ChallengeStatusValue }; invitedBy: UserLite }>;
+  const { challengeRows, pendingInvitations } = await fetchCached();
+  const cards = challengeRows.map((row) => challengeToCard(row, userId));
 
   return {
     running: cards.filter((c) => c.status === "PENDING" || c.status === "ACTIVE"),
