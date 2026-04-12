@@ -70,13 +70,12 @@ export function DashboardHeader() {
           <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
           </svg>
-          {/* Notification dot */}
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-green rounded-full" />
+
         </Link>
 
         {/* Live status */}
         <div className="hidden sm:flex items-center gap-1.5 px-2 h-7 rounded bg-green/5 border border-green/10">
-          <span className="w-1.5 h-1.5 bg-green rounded-full animate-livepulse" />
+          <span className="w-1.5 h-1.5 bg-green rounded-full" />
           <span className="text-[11px] font-mono text-green font-medium">LIVE</span>
         </div>
 
