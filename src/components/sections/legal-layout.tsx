@@ -104,7 +104,7 @@ export function LegalLayout({ title, lastUpdated, sections, children }: LegalLay
             <p className="text-sm font-mono text-fg-muted uppercase tracking-wider">Last Updated: {lastUpdated}</p>
           </header>
           
-          <div className="prose prose-invert max-w-none text-fg-secondary prose-headings:text-fg prose-h2:text-2xl prose-h2:font-semibold prose-h2:mt-12 prose-h2:mb-4 prose-p:leading-relaxed prose-p:mb-6 prose-li:mb-2 prose-strong:text-fg prose-a:text-green hover:prose-a:text-green/80">
+          <div className="text-fg-secondary text-[15px] sm:text-[16px] leading-[1.75] [&_h2]:text-2xl [&_h2]:sm:text-3xl [&_h2]:font-bold [&_h2]:text-fg [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:tracking-tight [&_h2]:border-b [&_h2]:border-line [&_h2]:pb-4 [&_p]:mb-6 [&_strong]:text-fg [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ul]:space-y-3 [&_li]:pl-1 [&_a]:text-green hover:[&_a]:underline">
             {children}
           </div>
         </main>
