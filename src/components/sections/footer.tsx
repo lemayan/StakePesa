@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Logo } from "@/components/ui/logo";
 import { motion } from "framer-motion";
 
@@ -63,9 +64,9 @@ export function Footer() {
             Legal
           </p>
           <ul className="space-y-2.5 text-fg-secondary text-[15px]">
-            <li><a href="#" className="hover:text-fg transition-colors duration-200">Privacy</a></li>
-            <li><a href="#" className="hover:text-fg transition-colors duration-200">Terms</a></li>
-            <li><a href="#" className="hover:text-fg transition-colors duration-200">Cookies</a></li>
+            <li><Link href="/privacy" className="hover:text-fg transition-colors duration-200">Privacy</Link></li>
+            <li><Link href="/terms" className="hover:text-fg transition-colors duration-200">Terms</Link></li>
+            <li><Link href="#" className="hover:text-fg transition-colors duration-200">Cookies</Link></li>
           </ul>
         </motion.div>
       </div>
