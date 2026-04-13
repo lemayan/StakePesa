@@ -127,13 +127,22 @@ export function LegalLayout({ title, lastUpdated, sections, children }: LegalLay
               </div>
 
               <div className="pt-4 border-t border-line space-y-4">
-                <a 
-                  href="mailto:support@stakepesa.com?subject=Legal%20Feedback"
-                  className="flex items-center gap-2 text-sm text-fg-secondary hover:text-fg transition-colors"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                  Send Feedback
-                </a>
+                <button 
+                onClick={(e) => {
+                  e.preventDefault();
+                  try {
+                    window.location.href = "mailto:support@stakepesa.com?subject=StakePesa%20Legal%20Feedback";
+                  } catch(err) {
+                    // Fallback to clipboard if mailto throws or blocked
+                    navigator.clipboard.writeText("support@stakepesa.com");
+                    alert("Email copied to clipboard: support@stakepesa.com");
+                  }
+                }}
+                className="w-full flex items-center justify-center gap-2 text-sm text-[var(--background)] bg-green hover:opacity-90 transition-all px-4 py-3 rounded-lg font-bold shadow-[0_0_15px_rgba(0,255,102,0.2)] hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                Send Feedback
+              </button>
                 <div>
                   <PrintButton />
                 </div>
