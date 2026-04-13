@@ -67,63 +67,98 @@ export function LegalLayout({ title, lastUpdated, sections, children }: LegalLay
   };
 
   return (
-    <div className="max-w-[1200px] mx-auto px-5 lg:px-10 py-8 lg:py-16 min-h-screen print:py-0 print:px-0 print:m-0 print:bg-white print:text-black">
-      <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 print:block">
-        
-        {/* Sticky Sidebar Navigation - HIDE IN PRINT */}
-        <aside className="w-full lg:w-[280px] shrink-0 print:hidden">
-          <div className="sticky top-24 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto pr-4 pb-8">
-            <div>
-              <h2 className="text-sm font-semibold text-fg uppercase tracking-wider mb-4 border-b border-line pb-2">Contents</h2>
-              <nav className="flex flex-col space-y-1">
-                {sections.map((section) => (
-                  <button
-                    key={section.id}
-                    onClick={() => scrollToSection(section.id)}
-                    className={`text-left text-sm py-1.5 px-3 rounded-md transition-colors ${
-                      activeSection === section.id
-                        ? "bg-green/10 text-green font-medium"
-                        : "text-fg-secondary hover:text-fg hover:bg-line/30"
-                    }`}
-                  >
-                    {section.title}
-                  </button>
-                ))}
-              </nav>
-            </div>
-
-            <div className="pt-4 border-t border-line space-y-4">
-              <a 
-                href="mailto:support@stakepesa.com?subject=Legal%20Feedback"
-                className="flex items-center gap-2 text-sm text-fg-secondary hover:text-fg transition-colors"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                Send Feedback
-              </a>
-              <div>
-                <PrintButton />
-              </div>
-              <div className="pt-2">
-                <Link href="/" className="text-sm text-green hover:underline">
-                  &larr; Return to Home
-                </Link>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Content Area */}
-        <main className="flex-1 max-w-[800px] print:max-w-none print:w-full print:block print:text-black">
-          <header className="mb-12 print:mb-6">
-            <h1 className="text-4xl lg:text-5xl font-bold tracking-tight mb-4 print:text-black print:text-3xl">{title}</h1>
-            <p className="text-sm font-mono text-fg-muted uppercase tracking-wider print:text-gray-600">Last Updated: {lastUpdated}</p>
-          </header>
+    <>
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @media print {
+            .hide-on-print {
+              display: none !important;
+            }
+            .print-full-width {
+              width: 100% !important;
+              max-width: none !important;
+              display: block !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            body {
+              background: white !important;
+              color: black !important;
+            }
+            .print-color-black,
+            .print-color-black * {
+              color: black !important;
+              background: transparent !important;
+            }
+            .print-color-black h2 {
+              border-bottom-color: #ccc !important;
+              margin-top: 2rem !important;
+              margin-bottom: 1rem !important;
+            }
+            .print-color-black a {
+              text-decoration: underline !important;
+            }
+          }
+        `
+      }} />
+      <div className="max-w-[1200px] mx-auto px-5 lg:px-10 py-8 lg:py-16 min-h-screen print-full-width print-color-black">
+        <div className="flex flex-col lg:flex-row gap-8 lg:gap-16 print-full-width">
           
-          <div className="text-fg-secondary text-[15px] sm:text-[16px] leading-[1.75] print:text-[12pt] print:leading-normal print:text-black print:[&_*]:text-black print:[&_h2]:text-black print:[&_h2]:border-gray-300 print:[&_strong]:text-black [&_h2]:text-2xl [&_h2]:sm:text-3xl [&_h2]:font-bold [&_h2]:text-fg [&_h2]:mt-16 [&_h2]:mb-6 print:[&_h2]:mt-8 print:[&_h2]:mb-4 [&_h2]:tracking-tight [&_h2]:border-b [&_h2]:border-line [&_h2]:pb-4 [&_p]:mb-6 [&_strong]:text-fg [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ul]:space-y-3 [&_li]:pl-1 [&_a]:text-green hover:[&_a]:underline">
-            {children}
-          </div>
-        </main>
+          {/* Sticky Sidebar Navigation - HIDE IN PRINT */}
+          <aside className="w-full lg:w-[280px] shrink-0 hide-on-print">
+            <div className="sticky top-24 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto pr-4 pb-8">
+              <div>
+                <h2 className="text-sm font-semibold text-fg uppercase tracking-wider mb-4 border-b border-line pb-2">Contents</h2>
+                <nav className="flex flex-col space-y-1">
+                  {sections.map((section) => (
+                    <button
+                      key={section.id}
+                      onClick={() => scrollToSection(section.id)}
+                      className={`text-left text-sm py-1.5 px-3 rounded-md transition-colors ${
+                        activeSection === section.id
+                          ? "bg-green/10 text-green font-medium"
+                          : "text-fg-secondary hover:text-fg hover:bg-line/30"
+                      }`}
+                    >
+                      {section.title}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+
+              <div className="pt-4 border-t border-line space-y-4">
+                <a 
+                  href="mailto:support@stakepesa.com?subject=Legal%20Feedback"
+                  className="flex items-center gap-2 text-sm text-fg-secondary hover:text-fg transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                  Send Feedback
+                </a>
+                <div>
+                  <PrintButton />
+                </div>
+                <div className="pt-2">
+                  <Link href="/" className="text-sm text-green hover:underline">
+                    &larr; Return to Home
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Content Area */}
+          <main className="flex-1 max-w-[800px] print-full-width">
+            <header className="mb-12 print:mb-6">
+              <h1 className="text-4xl lg:text-5xl font-bold tracking-tight mb-4">{title}</h1>
+              <p className="text-sm font-mono text-fg-muted uppercase tracking-wider">Last Updated: {lastUpdated}</p>
+            </header>
+            
+            <div className="text-fg-secondary text-[15px] sm:text-[16px] leading-[1.75] [&_h2]:text-2xl [&_h2]:sm:text-3xl [&_h2]:font-bold [&_h2]:text-fg [&_h2]:mt-16 [&_h2]:mb-6 [&_h2]:tracking-tight [&_h2]:border-b [&_h2]:border-line [&_h2]:pb-4 [&_p]:mb-6 [&_strong]:text-fg [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-6 [&_ul]:space-y-3 [&_li]:pl-1 [&_a]:text-green hover:[&_a]:underline">
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
