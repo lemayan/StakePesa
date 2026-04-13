@@ -57,7 +57,7 @@ export function LegalLayout({ title, lastUpdated, sections, children }: LegalLay
         
         {/* Sticky Sidebar Navigation */}
         <aside className="w-full lg:w-[280px] shrink-0">
-          <div className="sticky top-24 space-y-6">
+          <div className="sticky top-24 space-y-6 max-h-[calc(100vh-6rem)] overflow-y-auto pr-4 pb-8">
             <div>
               <h2 className="text-sm font-semibold text-fg uppercase tracking-wider mb-4 border-b border-line pb-2">Contents</h2>
               <nav className="flex flex-col space-y-1">
