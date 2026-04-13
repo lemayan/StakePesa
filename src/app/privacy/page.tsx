@@ -1,143 +1,99 @@
-import Link from "next/link";
-import { PrintButton } from "@/components/ui/print-button";
+import { LegalLayout } from "@/components/sections/legal-layout";
 
 export const metadata = {
-  title: "Privacy Policy | Stake Pesa",
+  title: "Privacy Policy Framework | StakePesa",
 };
 
 export default function PrivacyPage() {
+  const sections = [
+    { id: "p1", title: "1. Policy Scope and Agreement" },
+    { id: "p2", title: "2. Information Architecture" },
+    { id: "p3", title: "3. Cryptographic and Financial Data" },
+    { id: "p4", title: "4. Permitted Disclosure and Aggregation" },
+    { id: "p5", title: "5. State Surveillance and Compliance" },
+    { id: "p6", title: "6. Data Rentention Lifecycles" },
+    { id: "p7", title: "7. Cookie Mechanics & Telemetry" },
+    { id: "p8", title: "8. User DSR Rights (DPA/GDPR)" },
+    { id: "p9", title: "9. Exemption from Third-Party Breach" },
+  ];
+
   return (
-    <main className="max-w-4xl mx-auto px-5 py-10 space-y-8">
-      <header className="space-y-4 border-b border-line pb-6">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Privacy Policy</h1>
-            <p className="text-sm text-fg-secondary mt-1">Last Updated: April 13, 2026</p>
-          </div>
-          <PrintButton />
-        </div>
-        <p className="text-sm text-fg-secondary uppercase tracking-wider font-mono">
-          Data Protection and Privacy Framework
+    <LegalLayout
+      title="StakePesa Privacy Framework"
+      lastUpdated="April 14, 2026"
+      sections={sections}
+    >
+      <section id="p1">
+        <h2>1. Policy Scope and Irrevocable Agreement</h2>
+        <p>
+          This Data Protection and Privacy Framework ("Policy") establishes the exhaustive ruleset for how StakePesa ("we", "our") ingests, encrypts, analyzes, transacts, and archives personal data. By accessing the Platform, you confer explicit, informed, and irrevocable consent to the data practices described herein, satisfying the threshold requirements of the Kenya Data Protection Act, 2019 (DPA) and providing aligned protections matching the GDPR.
         </p>
-      </header>
+      </section>
 
-      <div className="prose prose-invert max-w-none text-fg-secondary text-[15px] leading-relaxed space-y-6">
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">1. Policy Overview and Scope</h2>
-          <p>
-            Stake Pesa ("we", "us", "our") respects your privacy and is committed to protecting your personal data. This comprehensive Privacy Policy outlines our practices regarding the collection, use, retention, and disclosure of personal data when you use the Stake Pesa platform.
-          </p>
-          <p>
-            This Policy is strictly aligned with the Kenya Data Protection Act, 2019 (DPA) and the General Data Protection Regulation (GDPR) for our international users, ensuring a robust standard of data privacy and user rights across all jurisdictions.
-          </p>
-        </section>
+      <section id="p2">
+        <h2>2. Data Information Architecture</h2>
+        <p>
+          <strong>2.1 Volitional Data.</strong> We collect exact identifiers inputted by you, including but not limited to Legal Name, Email Address, and Phone Number (used primarily for KYC and M-Pesa programmatic linking).
+        </p>
+        <p>
+          <strong>2.2 Automated Telemetry.</strong> Interaction with the Platform automatically triggers telemetry collection. This includes IP Address vectors, User-Agent strings, browser fingerprints, geolocation metadata (derived or explicit), session duration mapping, and behavioral clickstream anomalies. We use this telemetry to fiercely defend the platform against synthetic traffic, botnets, and multi-accounting exploit rings.
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">2. Data We Collect</h2>
-          <p>
-            We collect the following categories of personal data to effectively operate our service:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Identity & Contact Data:</strong> Full name, email address, phone number (Crucially for M-Pesa integration).</li>
-            <li><strong>Financial Data:</strong> Wallet balances, transaction history, M-Pesa payment references, and escrow ledger metadata. We do not store your direct banking pins or passwords.</li>
-            <li><strong>Platform Data:</strong> Challenge participation records, dispute evidence, communications between users on the platform, and support tickets.</li>
-            <li><strong>Technical & Telemetry Data:</strong> IP addresses, browser types, device identifiers, time-zone settings, and operating system details.</li>
-          </ul>
-        </section>
+      <section id="p3">
+        <h2>3. Cryptographic and Financial Data Handling</h2>
+        <p>
+          Your financial fluidity on the Platform requires intimate linkage with external gateways (e.g., Safaricom M-Pesa, IntaSend). StakePesa <strong>does not</strong> store plaintext passwords or banking PINs. We store cryptographic hashes, payment transaction idempotency keys, receipt IDs, and ledger balances. You acknowledge that financial data parsed through APIs rests outside of our exclusive sovereign control, and is subject to the security physics of our gateway partners.
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">3. Legal Bases and Purpose of Processing</h2>
-          <p>
-            Under the Kenyan DPA and GDPR, we rely on the following lawful bases to process your data:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Contractual Necessity:</strong> To provide you with wallet capabilities, challenge escrow settlements, and account management.</li>
-            <li><strong>Legal Obligation:</strong> To comply with Anti-Money Laundering (AML) laws in Kenya, KYC regulations, tax requirements, and court orders.</li>
-            <li><strong>Legitimate Interests:</strong> To detect and prevent fraud, ensure network security, conduct data analytics for platform improvement, and manage disputes.</li>
-            <li><strong>Consent:</strong> For marketing communications where you have explicitly opted in. You may withdraw consent at any time.</li>
-          </ul>
-        </section>
+      <section id="p4">
+        <h2>4. Permitted Disclosure and Aggregation Rights</h2>
+        <p>
+          <strong>4.1 Corporate Utilization.</strong> We categorically do not sell your unhashed contact data to third-party ad brokers. However, StakePesa reserves the right to anonymize, hash, and aggregate your historical challenge behavior and volumetric financial data. This sanitized data becomes the sole proprietary asset of StakePesa, to be used for algorithmic training, marketing broadsheets, or sold to institutional research sectors.
+        </p>
+        <p>
+          <strong>4.2 Essential Third-Parties.</strong> We disclose data dynamically to cloud hosts (AWS, Vercel), email delivery grids (Resend), and risk-management vendors. These disclosures are bound by stringent Standard Contractual Clauses (SCCs).
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">4. Data Sharing and Third-Party Disclosures</h2>
-          <p>
-            We may share your data under strict confidentiality agreements with:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Payment Gateways & Telecoms:</strong> Such as Safaricom (for M-Pesa processing) and IntaSend to facilitate deposits and withdrawals.</li>
-            <li><strong>Cloud Service Providers:</strong> For secure hosting and database management (e.g., AWS, Vercel).</li>
-            <li><strong>Regulatory & Law Enforcement Authorities:</strong> E.g., The Office of the Data Protection Commissioner (ODPC) in Kenya, or the Financial Reporting Centre (FRC), when legally compelled to do so to prevent crime or fraud.</li>
-          </ul>
-          <p>
-            Stake Pesa categorically does not sell your personal data to third parties for independent marketing purposes.
-          </p>
-        </section>
+      <section id="p5">
+        <h2>5. State Surveillance and Compliance Directives</h2>
+        <p>
+          StakePesa cooperates intimately with the Republic of Kenya's law enforcement agencies, the Financial Reporting Centre (FRC), and the Office of the Data Protection Commissioner (ODPC). <strong>We waive your notification rights</strong> if served with a valid court order, subpoena, or a lawful secret directive investigating major criminal activity, terrorism financing, or platform fraud. We will hand over IP logs, payment ledgers, and communication histories to the state when legally forced to do so.
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">5. International Data Transfers</h2>
-          <p>
-            As a digital platform, your data may be transferred to and stored in designated cloud server regions outside of Kenya. Where data crosses borders, we ensure adequate safeguards are implemented—such as Standard Contractual Clauses (SCCs)—to guarantee an equivalent level of protection as mandated by the Kenya DPA and GDPR provisions governing cross-border transfers.
-          </p>
-        </section>
+      <section id="p6">
+        <h2>6. Data Retention Lifecycles</h2>
+        <p>
+          Operational metadata is retained dynamically to serve account needs. However, in strict observance of Kenyan financial reporting and tax obligations, complete transactional records, deposit histories, and KYC metadata are hard-locked and archived for a minimum statutory period of seven (7) years—even upon the explicit execution of an account deletion request by a user.
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">6. Data Retention</h2>
-          <p>
-            We retain your personal data only as long as necessary to fulfill the purposes for which it was collected. For compliance with Kenyan financial and tax regulations, basic identity and transaction records may be kept for a statutory period (typically up to seven (7) years) even after account deletion. User-generated challenge data will be anonymized or securely deleted once no longer operationally needed.
-          </p>
-        </section>
+      <section id="p7">
+        <h2>7. Cookie Mechanics and Tracking Telemetry</h2>
+        <p>
+          Our application necessitates the deployment of persistent and session-based cookies, local storage fragments, and JWT tokens to anchor authenticated state. You possess the browser-level capacity to annihilate these trackers; however, executing such a blockade will intentionally degrade the logic of the application, rendering logins broken and escrow interactions impossible. Your continued traversal of the Platform serves as affirmative consent to our storage technologies.
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">7. Security Measures</h2>
-          <p>
-            We deploy robust technical and organizational measures including end-to-end encryption, strict access controls, secure network firewalls, and regular security audits to protect against unauthorized access, alteration, disclosure, or destruction of your personal data. However, the transmission of information via the internet carries inherent risks; thus, users are responsible for securing their account credentials.
-          </p>
-        </section>
+      <section id="p8">
+        <h2>8. Data Subject Rights (DSR) & Limitations</h2>
+        <p>
+          Pursuant to the Kenyan DPA, you ostensibly maintain the right to query (Access), patch (Rectification), extract (Portability), or obliterate (Erasure) your data. You may lodge these complex requests via our designated feedback vectors or legal email. 
+        </p>
+        <p>
+          <strong>Notice of Limitation:</strong> Your "Right to be Forgotten" is strictly superseded by our mandatory seven-year financial retention mandates (Clause 6), Anti-Money Laundering protocol, and our right to retain data mathematically necessary to enforce permanent account bans (i.e. retaining a hashed phone number to prevent banned users from reincarnating).
+        </p>
+      </section>
 
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">8. Data Subject Rights</h2>
-          <p>
-            Under the DPA and GDPR, you possess significant rights regarding your data:
-          </p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Right to Access:</strong> Request copies of your personal data.</li>
-            <li><strong>Right to Rectification:</strong> Request correction of inaccurate or incomplete data.</li>
-            <li><strong>Right to Erasure ("Right to be Forgotten"):</strong> Request deletion of data, subject to local regulatory retention mandates.</li>
-            <li><strong>Right to Data Portability:</strong> Obtain your data in a structured, machine-readable format.</li>
-            <li><strong>Right to Object/Restrict:</strong> Object to or limit processing based on legitimate interests.</li>
-          </ul>
-          <p>
-            To exercise these rights, please submit a formalized request via our support desk. We are obligated by law to respond within thirty (30) days.
-          </p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">9. Cookies and Tracking Technologies</h2>
-          <p>
-            We use cookies and similar tracing technologies to track activity on Stake Pesa and enhance the user experience. You can instruct your browser to refuse all cookies; however, some core functionalities (like account authentication and secure sessions) may become unavailable.
-          </p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">10. Policy Alterations</h2>
-          <p>
-            We reserve the right to amend this Privacy Policy periodically to reflect changes in regulatory standards or operational practices. Significant modifications will be explicitly communicated to you via email or prominent platform notifications.
-          </p>
-        </section>
-
-        <section className="space-y-3">
-          <h2 className="text-xl font-semibold text-fg">11. Contact the Data Protection Officer</h2>
-          <p>
-            If you have questions, grievances, or want to assert your Data Subject Rights under Kenyan or International Law, please direct your correspondence to our Data Protection Officer (DPO) via the in-app support channels or our official legal contact email listed on the platform. You also have the right to lodge a complaint directly with the Office of the Data Protection Commissioner (ODPC) in Kenya.
-          </p>
-        </section>
-      </div>
-
-      <div className="pt-6 border-t border-line mt-10 print:hidden">
-        <Link href="/" className="text-sm text-green hover:underline font-medium">
-          &larr; Return to Homepage
-        </Link>
-      </div>
-    </main>
+      <section id="p9">
+        <h2>9. Comprehensive Exemption from Third-Party Breach</h2>
+        <p>
+          StakePesa utilizes industry-best-practice encryptions (TLS 1.3, AES-256 for resting data). Nevertheless, the cyber domain is inherently precarious. Should a state-sponsored attack, zero-day exploit, or downstream vendor breach compromise your data, you explicitly agree that StakePesa shall not be held liable for compensatory or punitive damages stemming from said catastrophic breach, provided StakePesa acted without documented willful negligence.
+        </p>
+      </section>
+    </LegalLayout>
   );
 }
