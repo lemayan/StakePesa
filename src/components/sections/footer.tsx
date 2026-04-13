@@ -69,15 +69,8 @@ export function Footer() {
           </ul>
         </motion.div>
       </div>
-      <div className="border-t border-line h-auto sm:h-12 flex flex-col sm:flex-row items-center justify-between px-5 sm:px-8 py-3 sm:py-0 gap-2 sm:gap-0 text-[12px] sm:text-[14px] text-fg-muted font-mono">
+      <div className="border-t border-line h-auto sm:h-12 flex flex-col sm:flex-row items-center justify-center px-5 sm:px-8 py-3 sm:py-0 gap-2 sm:gap-0 text-[12px] sm:text-[14px] text-fg-muted font-mono">
         <span>&copy; 2025 Stake Pesa</span>
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green" />
-          </span>
-          <span>All systems operational</span>
-        </div>
       </div>
     </footer>
   );
