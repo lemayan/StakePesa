@@ -3,7 +3,7 @@ import { Resend } from "resend";
 const domain = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const year = new Date().getFullYear();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_for_build_purposes");
 
 // Fire-and-forget send helper — wraps Resend so all send sites stay consistent
 async function sendEmail(to: string, subject: string, html: string): Promise<void> {
