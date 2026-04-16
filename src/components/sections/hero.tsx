@@ -323,8 +323,8 @@ export function Hero() {
           <div className="absolute inset-0 bg-grid opacity-[0.03]" />
 
           <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
             className="relative text-[clamp(2rem,7vw,5rem)] font-bold leading-[1.08] tracking-tight"
           >
@@ -333,8 +333,8 @@ export function Hero() {
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.4 }}
             className="relative text-[15px] sm:text-[18px] text-fg-secondary mt-4 sm:mt-5 max-w-lg leading-relaxed"
           >
@@ -342,8 +342,8 @@ export function Hero() {
           </motion.p>
 
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.6 }}
             className="relative flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mt-6 sm:mt-9"
           >
@@ -380,9 +380,8 @@ export function Hero() {
         <div className="flex items-center lg:items-start justify-center p-3 sm:p-4 lg:p-6 lg:pt-16 perspective-1000">
           {/* Card Container */}
           <motion.div 
-            key={market.id}
-            initial={{ opacity: 0, scale: 0.98, y: 10, rotateX: 2 }}
-            animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
             className="w-full max-w-[900px] md:min-h-[460px] bg-bg/80 backdrop-blur-xl border border-line rounded-[16px] sm:rounded-[20px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] p-4 sm:p-6 lg:p-8 relative overflow-hidden flex flex-col"
           >
@@ -523,8 +522,8 @@ export function Hero() {
 
         {/* Bottom utility strip for now (easy ad-slot replacement later) */}
         <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={{ duration: 0.45, delay: 0.95 }}
           className="hidden lg:grid lg:col-span-2 mt-2 mb-6 mx-8 grid-cols-[auto_1fr_auto] items-center gap-4 border border-line bg-bg-above/70 backdrop-blur-sm rounded-xl px-4 py-3"
         >

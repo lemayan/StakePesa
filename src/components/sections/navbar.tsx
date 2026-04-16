@@ -139,10 +139,7 @@ export function Navbar() {
   return (
     <>
       {/* ══════════════════════════════ PRIMARY NAV ROW ══════════════════════════════ */}
-      <motion.header
-        initial={{ y: -24, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      <header
         className={`sticky top-0 z-50 transition-all duration-300 ${
           scrolled
             ? "bg-bg/90 backdrop-blur-xl shadow-[0_1px_0_0_var(--c-line),0_8px_32px_-8px_rgba(0,0,0,0.24)]"
@@ -298,7 +295,7 @@ export function Navbar() {
             ))}
           </div>
         </div>
-      </motion.header>
+      </header>
 
       {/* ══════════════════════════════ MOBILE MENU ══════════════════════════════ */}
       <AnimatePresence>
