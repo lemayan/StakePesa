@@ -70,6 +70,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.email = user.email
                 token.image = user.image
                 token.role = (user as { role?: string }).role ?? "USER"
+                if (user.id) {
+                    const freshRole = await db.user.findUnique({
+                        where: { id: user.id },
+                        select: { role: true },
+                    })
+                    if (freshRole?.role) {
+                        token.role = freshRole.role
+                    }
+                }
                 if (account?.provider === "google" && user.image) {
                     token.providerImage = user.image
                 }

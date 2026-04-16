@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { AdminNav } from "@/components/admin/admin-nav"
-import { Gauge, SlidersHorizontal, Trophy, Waypoints } from "lucide-react"
+import type { NavItem } from "@/components/admin/admin-nav"
 
-const nav = [
-  { href: "/admin", label: "Dashboard", icon: Gauge },
-  { href: "/admin/markets", label: "Active Markets", icon: Waypoints },
-  { href: "/admin/resolved", label: "Resolved Markets", icon: Trophy },
-  { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
+const nav: NavItem[] = [
+  { href: "/admin", label: "Dashboard", iconKey: "dashboard" },
+  { href: "/admin/markets", label: "Active Markets", iconKey: "markets" },
+  { href: "/admin/resolved", label: "Resolved Markets", iconKey: "resolved" },
+  { href: "/admin/settings", label: "Settings", iconKey: "settings" },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

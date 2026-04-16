@@ -2,12 +2,21 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { LucideIcon } from "lucide-react"
+import { Gauge, SlidersHorizontal, Trophy, Waypoints } from "lucide-react"
 
-type NavItem = {
+type IconKey = "dashboard" | "markets" | "resolved" | "settings"
+
+const ICONS_BY_KEY = {
+  dashboard: Gauge,
+  markets: Waypoints,
+  resolved: Trophy,
+  settings: SlidersHorizontal,
+} as const
+
+export type NavItem = {
   href: string
   label: string
-  icon: LucideIcon
+  iconKey: IconKey
 }
 
 type Props = {
@@ -20,7 +29,7 @@ export function AdminNav({ items }: Props) {
   return (
     <nav className="space-y-1">
       {items.map((item) => {
-        const Icon = item.icon
+        const Icon = ICONS_BY_KEY[item.iconKey]
         const isActive =
           pathname === item.href ||
           (item.href !== "/admin" && pathname.startsWith(item.href))

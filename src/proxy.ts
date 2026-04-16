@@ -5,6 +5,13 @@ export default auth((req) => {
     const { pathname } = req.nextUrl
     const isLoggedIn = !!req.auth
     const role = (req.auth?.user as { role?: string } | undefined)?.role ?? "USER"
+    const email = (req.auth?.user as { email?: string } | undefined)?.email?.toLowerCase() ?? ""
+    const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean)
+    const isAdminByEmail = email.length > 0 && adminEmails.includes(email)
+    const isAdmin = role === "ADMIN" || isAdminByEmail
 
     // Protected routes — require authentication
     const protectedPaths = ["/dashboard", "/admin"]
@@ -16,7 +23,7 @@ export default auth((req) => {
         return NextResponse.redirect(loginUrl)
     }
 
-    if (pathname.startsWith("/admin") && role !== "ADMIN") {
+    if (pathname.startsWith("/admin") && !isAdmin) {
         return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin))
     }
 
