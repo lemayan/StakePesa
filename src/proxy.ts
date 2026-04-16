@@ -4,15 +4,20 @@ import { NextResponse } from "next/server"
 export default auth((req) => {
     const { pathname } = req.nextUrl
     const isLoggedIn = !!req.auth
+    const role = (req.auth?.user as { role?: string } | undefined)?.role ?? "USER"
 
     // Protected routes — require authentication
-    const protectedPaths = ["/dashboard"]
+    const protectedPaths = ["/dashboard", "/admin"]
     const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
 
     if (isProtected && !isLoggedIn) {
         const loginUrl = new URL("/login", req.nextUrl.origin)
         loginUrl.searchParams.set("callbackUrl", pathname)
         return NextResponse.redirect(loginUrl)
+    }
+
+    if (pathname.startsWith("/admin") && role !== "ADMIN") {
+        return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin))
     }
 
     // If logged-in user visits login/signup, send them to dashboard
@@ -27,5 +32,5 @@ export default auth((req) => {
 })
 
 export const config = {
-    matcher: ["/dashboard/:path*", "/login", "/signup"],
+    matcher: ["/dashboard/:path*", "/admin/:path*", "/login", "/signup"],
 }

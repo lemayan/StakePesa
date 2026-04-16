@@ -27,13 +27,31 @@ const placeBetSchema = z.object({
     requestId: z.string().uuid(),
 })
 
+type PlaceBetActionResponse =
+    | {
+        success: true
+        betId?: string
+        oddsAtPlacement?: number
+        estimatedReturnCents?: number
+        message?: string
+    }
+    | {
+        success?: false
+        error: string
+        riskFlags?: Array<{ code: string; message: string; severity: string }>
+        fraudFlags?: Array<{ code: string; message: string; severity: string }>
+        maxAllowedStakeCents?: number
+        retryAfterSeconds?: number
+        cooldownEndsAt?: string
+    }
+
 /**
  * Server action: place a bet on a market outcome.
  *
  * Validates the session, fetches wallet balance, then delegates
  * to the market-betting service which runs the odds engine & DB ops.
  */
-export async function placeBetAction(input: z.infer<typeof placeBetSchema>) {
+export async function placeBetAction(input: z.infer<typeof placeBetSchema>): Promise<PlaceBetActionResponse> {
     const session = await auth()
     if (!session?.user?.id) {
         return { error: "You must be logged in to place a bet." }
@@ -60,7 +78,7 @@ export async function placeBetAction(input: z.infer<typeof placeBetSchema>) {
     }
     if (claim.kind === "completed") {
         if (typeof claim.responseBody === "object" && claim.responseBody !== null) {
-            return claim.responseBody as Record<string, unknown>
+            return claim.responseBody as PlaceBetActionResponse
         }
         return { error: "Unable to replay previous response for this request." }
     }
@@ -79,9 +97,10 @@ export async function placeBetAction(input: z.infer<typeof placeBetSchema>) {
             walletBalance
         )
 
-        const responseBody = !result.success
+        const responseBody: PlaceBetActionResponse = !result.success
             ? {
-                error: result.error,
+            success: false,
+            error: result.error ?? "Bet failed. Please try again.",
                 riskFlags: result.riskFlags,
                 fraudFlags: result.fraudFlags,
                 maxAllowedStakeCents: result.maxAllowedStakeCents,
@@ -135,7 +154,7 @@ export async function estimatePayoutAction(
     outcome: string,
     stakeCents: number
 ) {
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) {
         return { error: `Market "${marketId}" not found.` }
     }

@@ -3,11 +3,11 @@ import { auth } from "@/auth";
 import { getMarketOddsAction } from "@/actions/market";
 import { getWalletBalance } from "@/lib/wallet";
 import { MarketDetailClient } from "@/components/markets/market-detail-client";
-import markets from "@/data/markets.json";
+import { getMarketCatalogById } from "@/lib/market-catalog";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const market = markets.markets.find((m) => m.id === id);
+  const market = await getMarketCatalogById(id);
   if (!market) return { title: "Market Not Found | StakePesa" };
   return {
     title: `${market.title} | StakePesa Markets`,
@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 export default async function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  const staticMarket = markets.markets.find((m) => m.id === id);
+  const staticMarket = await getMarketCatalogById(id);
   if (!staticMarket) notFound();
 
   const session = await auth();

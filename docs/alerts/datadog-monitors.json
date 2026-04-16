@@ -1,0 +1,75 @@
+{
+  "name": "weka-pesa-monitor-pack",
+  "notes": "Replace <service>, <env>, <host>, <webhook_channel> placeholders before importing.",
+  "monitors": [
+    {
+      "name": "[WekaPesa] Outbox stale processing detected",
+      "type": "query alert",
+      "query": "max(last_5m):max:weka.outbox.stale_processing_count{env:<env>,service:<service>} > 0",
+      "message": "Critical: stale settlement outbox jobs detected. Check /api/admin/system/outbox immediately. Notify <webhook_channel>.",
+      "tags": ["team:platform", "service:<service>", "env:<env>", "component:settlement"],
+      "options": {
+        "notify_no_data": true,
+        "no_data_timeframe": 10,
+        "renotify_interval": 30,
+        "evaluation_delay": 60,
+        "include_tags": true
+      },
+      "priority": 1
+    },
+    {
+      "name": "[WekaPesa] Outbox pending backlog high",
+      "type": "query alert",
+      "query": "avg(last_5m):max:weka.outbox.pending_count{env:<env>,service:<service>} > 200",
+      "message": "Warning: settlement outbox pending backlog is high for 5m. Scale workers and inspect DB latency.",
+      "tags": ["team:platform", "service:<service>", "env:<env>", "component:settlement"],
+      "options": {
+        "notify_no_data": false,
+        "renotify_interval": 60,
+        "evaluation_delay": 60,
+        "include_tags": true
+      },
+      "priority": 2
+    },
+    {
+      "name": "[WekaPesa] Fraud blocked surge",
+      "type": "query alert",
+      "query": "change(max(last_1h),last_1h):max:weka.risk.fraud_blocked_24h{env:<env>,service:<service>} > 50",
+      "message": "Warning: fraud blocks surged in the last hour. Review /api/admin/markets/risk and tighten controls if needed.",
+      "tags": ["team:risk", "service:<service>", "env:<env>", "component:fraud"],
+      "options": {
+        "notify_no_data": false,
+        "renotify_interval": 60,
+        "include_tags": true
+      },
+      "priority": 2
+    },
+    {
+      "name": "[WekaPesa] Critical market risk exposure",
+      "type": "query alert",
+      "query": "max(last_10m):max:weka.risk.critical_markets{env:<env>,service:<service>} >= 1",
+      "message": "Warning: one or more markets are in CRITICAL risk state for over 10m.",
+      "tags": ["team:risk", "service:<service>", "env:<env>", "component:risk"],
+      "options": {
+        "notify_no_data": false,
+        "renotify_interval": 30,
+        "include_tags": true
+      },
+      "priority": 2
+    },
+    {
+      "name": "[WekaPesa] Monitoring heartbeat missing",
+      "type": "service check",
+      "query": "\"http.can_connect\".over(\"instance:https://<host>/api/internal/monitoring/heartbeat\").last(2).count_by_status()",
+      "message": "Critical: monitoring heartbeat endpoint is failing or unavailable.",
+      "tags": ["team:platform", "service:<service>", "env:<env>", "component:monitoring"],
+      "options": {
+        "notify_no_data": true,
+        "no_data_timeframe": 10,
+        "renotify_interval": 30,
+        "include_tags": true
+      },
+      "priority": 1
+    }
+  ]
+}

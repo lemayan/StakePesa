@@ -24,7 +24,7 @@ import {
     getActiveCooldown,
     getMaxCooldownWindowMinutes,
 } from "@/lib/fraud-enforcement"
-import markets from "@/data/markets.json"
+import { getMarketCatalog, getMarketCatalogById } from "@/lib/market-catalog"
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MARKET BETTING SERVICE
@@ -241,8 +241,8 @@ export async function getMarketSettlementSummary(
  * Gets the static market definition from markets.json by ID.
  * Returns null if the market doesn't exist in the static config.
  */
-export function getStaticMarket(marketId: string) {
-    return markets.markets.find((m) => m.id === marketId) ?? null
+export async function getStaticMarket(marketId: string) {
+    return getMarketCatalogById(marketId)
 }
 
 /**
@@ -251,7 +251,7 @@ export function getStaticMarket(marketId: string) {
  * Missing outcomes (no bets yet) are initialised to 0.
  */
 export async function getLivePool(marketId: string): Promise<OutcomePools> {
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) return {}
 
     // Initialise all outcomes at 0 so odds engine always sees a complete set
@@ -283,7 +283,7 @@ export async function getMarketOdds(
     marketId: string,
     houseMarginBps?: number
 ): Promise<MarketOddsSnapshot | null> {
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) return null
 
     const pool = await getLivePool(marketId)
@@ -294,6 +294,7 @@ export async function getMarketOdds(
  * Returns odds snapshots for all markets at once (for the dashboard).
  */
 export async function getAllMarketOdds(): Promise<MarketOddsSnapshot[]> {
+    const catalog = await getMarketCatalog()
     const allPools = await db.marketPool.findMany({
         select: { marketId: true, outcome: true, totalStakeCents: true, houseMarginBps: true },
     })
@@ -307,7 +308,7 @@ export async function getAllMarketOdds(): Promise<MarketOddsSnapshot[]> {
     }
 
     const snapshots: MarketOddsSnapshot[] = []
-    for (const market of markets.markets) {
+    for (const market of catalog) {
         const rows = byMarket.get(market.id) ?? []
 
         // Build pool map, default 0 for unseen outcomes
@@ -358,7 +359,7 @@ export async function placeBet(
     const dbNow = dbNowRows[0]?.now ?? new Date()
 
     // 1. Validate market exists in static config
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) {
         return { success: false, error: `Market "${marketId}" not found.` }
     }
@@ -780,7 +781,7 @@ export async function resolveMarket(
     resolvedByAdminId: string,
     settlementToken?: string
 ): Promise<MarketResolutionResult> {
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) {
         throw new Error(`Market "${marketId}" not found in static config.`)
     }
@@ -942,7 +943,7 @@ export async function cancelMarket(
     cancelledByAdminId: string,
     settlementToken?: string
 ): Promise<{ refunded: number; totalRefundedCents: number }> {
-    const staticMarket = getStaticMarket(marketId)
+    const staticMarket = await getStaticMarket(marketId)
     if (!staticMarket) throw new Error(`Market "${marketId}" not found.`)
 
     const pendingBets = await db.marketBet.findMany({
@@ -1008,6 +1009,9 @@ export async function cancelMarket(
  * Gets a user's betting history with profit/loss tracking.
  */
 export async function getUserBettingHistory(userId: string, limit = 20) {
+    const catalog = await getMarketCatalog()
+    const catalogById = new Map(catalog.map((market) => [market.id, market]))
+
     const bets = await db.marketBet.findMany({
         where: { userId },
         orderBy: { placedAt: "desc" },
@@ -1027,7 +1031,7 @@ export async function getUserBettingHistory(userId: string, limit = 20) {
     })
 
     return bets.map((bet) => {
-        const staticMarket = getStaticMarket(bet.marketId)
+        const staticMarket = catalogById.get(bet.marketId)
         const profitCents =
             bet.status === "WON" && bet.actualReturnCents != null
                 ? bet.actualReturnCents - bet.stakeCents

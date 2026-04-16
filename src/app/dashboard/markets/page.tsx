@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { getAllMarketOddsAction } from "@/actions/market";
 import { MarketsClient } from "@/components/markets/markets-client";
-import markets from "@/data/markets.json";
+import { getMarketCatalog } from "@/lib/market-catalog";
 
 export const metadata = {
   title: "Markets | StakePesa",
@@ -9,10 +8,13 @@ export const metadata = {
 };
 
 export default async function MarketsPage() {
-  const { snapshots } = await getAllMarketOddsAction();
+  const [{ snapshots }, catalog] = await Promise.all([
+    getAllMarketOddsAction(),
+    getMarketCatalog(),
+  ]);
 
-  // Merge static market metadata with live odds
-  const enriched = markets.markets.map((market) => {
+  // Merge market metadata with live odds
+  const enriched = catalog.map((market) => {
     const snap = snapshots?.find((s) => s.marketId === market.id);
     return {
       id: market.id,

@@ -113,6 +113,18 @@ enum VerificationVerdict {
   REJECT
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum AdminMarketLifecycleStatus {
+  OPEN
+  CLOSED
+  RESOLVING
+  SETTLED
+}
+
 // ──────────────────────────────────────────────
 // AUTH MODELS (existing — NextAuth v5)
 // ──────────────────────────────────────────────
@@ -124,6 +136,7 @@ model User {
   emailVerified DateTime?
   image         String?
   password      String?
+  role          UserRole  @default(USER)
 
   // Auth relations
   accounts Account[]
@@ -148,6 +161,8 @@ model User {
   resolvedChallenges    Challenge[]             @relation("ChallengeResolver")
   escrowLocks           EscrowLock[]
   auditLogs             AuditLog[]
+  adminMarketsCreated   AdminMarket[]           @relation("AdminMarketCreator")
+  adminMarketsResolved  AdminMarket[]           @relation("AdminMarketResolver")
 }
 
 model Account {
@@ -536,4 +551,65 @@ model MarketBet {
   @@index([marketPoolId])
   @@index([status])
   @@index([placedAt])
+}
+
+model Sector {
+  id        String      @id @default(uuid())
+  title     String
+  slug      String      @unique
+  iconName  String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  markets AdminMarket[]
+
+  @@index([title])
+}
+
+model AdminMarket {
+  id             String                     @id @default(cuid())
+  slug           String                     @unique
+  title          String
+  description    String?
+  imageUrl       String?
+  startsAt       DateTime
+  closesAt       DateTime
+  houseMarginBps Int                        @default(500)
+  trending       Boolean                    @default(false)
+  isActive       Boolean                    @default(true)
+  status         AdminMarketLifecycleStatus @default(OPEN)
+  sectorId       String
+  createdById    String
+  resolvedById   String?
+  resolvedAt     DateTime?
+  winningOutcome String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+
+  sector      Sector               @relation(fields: [sectorId], references: [id])
+  createdBy   User                 @relation("AdminMarketCreator", fields: [createdById], references: [id])
+  resolvedBy  User?                @relation("AdminMarketResolver", fields: [resolvedById], references: [id])
+  outcomes    AdminMarketOutcome[]
+
+  @@index([sectorId])
+  @@index([status])
+  @@index([trending])
+  @@index([isActive])
+  @@index([startsAt])
+  @@index([closesAt])
+}
+
+model AdminMarketOutcome {
+  id            String      @id @default(uuid())
+  marketId      String
+  name          String
+  seedStakeCents Int        @default(0)
+  orderIndex    Int         @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  market AdminMarket @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@unique([marketId, name])
+  @@index([marketId])
 }

@@ -69,6 +69,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.name = user.name
                 token.email = user.email
                 token.image = user.image
+                token.role = (user as { role?: string }).role ?? "USER"
                 if (account?.provider === "google" && user.image) {
                     token.providerImage = user.image
                 }
@@ -82,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     token.name = fresh.name
                     token.email = fresh.email
                     token.image = fresh.image
+                    token.role = fresh.role
                 }
             }
             return token
@@ -93,6 +95,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             session.user.name = typeof token.name === "string" ? token.name : ""
             session.user.email = typeof token.email === "string" ? token.email : ""
             session.user.image = typeof token.image === "string" ? token.image : ""
+            session.user.role = token.role === "ADMIN" || token.role === "USER" ? token.role : "USER"
             ;(session.user as typeof session.user & { providerImage?: string | null }).providerImage =
                 (token.providerImage as string | null | undefined) ?? null
             return session

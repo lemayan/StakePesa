@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test src/**/*.test.ts",
-    "seed:p2p-mocks": "node scripts/seed-p2p-mocks.mjs"
+    "test:admin-e2e": "node scripts/run-admin-e2e.cjs",
+    "admin:promote": "tsx scripts/promote-admin.ts",
+    "verify:production": "tsx scripts/verify-production-readiness.ts",
+    "seed:p2p-mocks": "node scripts/seed-p2p-mocks.mjs",
+    "seed:admin-sectors": "tsx scripts/seed-admin-sectors.ts",
+    "verify:admin-schema": "tsx scripts/verify-admin-schema.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

@@ -1,0 +1,187 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: weka-pesa-settlement-risk
+    folder: Weka Pesa
+    interval: 1m
+    rules:
+      - uid: weka_outbox_stale_processing
+        title: Outbox stale processing detected
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: max_over_time(weka_outbox_stale_processing_count[5m])
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 5m
+        noDataState: Alerting
+        execErrState: Alerting
+        annotations:
+          summary: Stale processing settlement jobs exist for over 5 minutes
+        labels:
+          severity: critical
+          component: settlement
+
+      - uid: weka_outbox_pending_backlog
+        title: Outbox pending backlog high
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: max_over_time(weka_outbox_pending_count[5m])
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [200]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        annotations:
+          summary: Pending settlement backlog is above 200
+        labels:
+          severity: warning
+          component: settlement
+
+      - uid: weka_risk_critical_markets
+        title: Critical market exposure detected
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              expr: max_over_time(weka_risk_critical_markets[10m])
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: gte
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 10m
+        noDataState: NoData
+        execErrState: Error
+        annotations:
+          summary: At least one market has remained in CRITICAL risk state for 10m
+        labels:
+          severity: warning
+          component: risk
+
+      - uid: weka_fraud_blocked_surge
+        title: Fraud blocked events surged
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 3600
+              to: 0
+            model:
+              expr: increase(weka_risk_fraud_blocked_24h[1h])
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [50]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: C
+              type: threshold
+        for: 5m
+        noDataState: NoData
+        execErrState: Error
+        annotations:
+          summary: Fraud blocked count rose sharply in the last hour
+        labels:
+          severity: warning
+          component: fraud
