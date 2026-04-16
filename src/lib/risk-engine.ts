@@ -356,6 +356,7 @@ export function assessBetRisk(params: {
         (1 - RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION)
     )
     maxAllowedStakeCents = Math.min(maxAllowedStakeCents, Math.max(0, maxUserStake))
+    maxAllowedStakeCents = Math.max(0, maxAllowedStakeCents)
 
     return {
         level,

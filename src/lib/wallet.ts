@@ -37,11 +37,16 @@ async function creditWalletFallback(
             create: { userId, balance: 0 },
         })
 
-        const newBalance = wallet.balance + safeAmount
         await tx.wallet.update({
             where: { id: wallet.id },
-            data: { balance: newBalance },
+            data: { balance: { increment: safeAmount } },
         })
+
+        const updatedWallet = await tx.wallet.findUnique({
+            where: { id: wallet.id },
+            select: { balance: true },
+        })
+        const newBalance = updatedWallet?.balance ?? 0
 
         const ledger = await tx.ledgerEntry.create({
             data: {
@@ -79,15 +84,29 @@ async function debitWalletFallback(
             create: { userId, balance: 0 },
         })
 
-        if (wallet.balance < safeAmount) {
-            throw new Error(`Insufficient funds. Balance: ${wallet.balance}, Requested: ${safeAmount}`)
+        const debitResult = await tx.wallet.updateMany({
+            where: {
+                id: wallet.id,
+                balance: { gte: safeAmount },
+            },
+            data: {
+                balance: { decrement: safeAmount },
+            },
+        })
+
+        if (debitResult.count === 0) {
+            const latest = await tx.wallet.findUnique({
+                where: { id: wallet.id },
+                select: { balance: true },
+            })
+            throw new Error(`Insufficient funds. Balance: ${latest?.balance ?? 0}, Requested: ${safeAmount}`)
         }
 
-        const newBalance = wallet.balance - safeAmount
-        await tx.wallet.update({
+        const updatedWallet = await tx.wallet.findUnique({
             where: { id: wallet.id },
-            data: { balance: newBalance },
+            select: { balance: true },
         })
+        const newBalance = updatedWallet?.balance ?? 0
 
         const ledger = await tx.ledgerEntry.create({
             data: {
@@ -117,7 +136,33 @@ export async function creditWallet(
     description?: string
 ): Promise<WalletMutationResult> {
     const safeAmount = Math.trunc(amountCents)
-    return creditWalletFallback(userId, safeAmount, transactionId, entryType, description)
+    try {
+        const result = await db.$queryRaw<
+            { new_balance: number; ledger_entry_id: string }[]
+        >(
+            Prisma.sql`SELECT * FROM credit_wallet(
+        ${userId},
+        ${safeAmount},
+        ${transactionId ? Prisma.sql`${transactionId}::uuid` : Prisma.sql`NULL`},
+        ${entryType},
+        ${description ?? null}
+      )`
+        )
+
+        if (!result || result.length === 0) {
+            throw new Error(`credit_wallet returned no result for user ${userId}`)
+        }
+
+        return {
+            newBalance: result[0].new_balance,
+            ledgerEntryId: result[0].ledger_entry_id,
+        }
+    } catch (error: unknown) {
+        if (isMissingRpcFunctionError(error, "credit_wallet")) {
+            return creditWalletFallback(userId, safeAmount, transactionId, entryType, description)
+        }
+        throw error
+    }
 }
 
 /**
@@ -133,7 +178,33 @@ export async function debitWallet(
     description?: string
 ): Promise<WalletMutationResult> {
     const safeAmount = Math.trunc(amountCents)
-    return debitWalletFallback(userId, safeAmount, transactionId, entryType, description)
+    try {
+        const result = await db.$queryRaw<
+            { new_balance: number; ledger_entry_id: string }[]
+        >(
+            Prisma.sql`SELECT * FROM debit_wallet(
+        ${userId},
+        ${safeAmount},
+        ${transactionId ? Prisma.sql`${transactionId}::uuid` : Prisma.sql`NULL`},
+        ${entryType},
+        ${description ?? null}
+      )`
+        )
+
+        if (!result || result.length === 0) {
+            throw new Error(`debit_wallet returned no result for user ${userId}`)
+        }
+
+        return {
+            newBalance: result[0].new_balance,
+            ledgerEntryId: result[0].ledger_entry_id,
+        }
+    } catch (error: unknown) {
+        if (isMissingRpcFunctionError(error, "debit_wallet")) {
+            return debitWalletFallback(userId, safeAmount, transactionId, entryType, description)
+        }
+        throw error
+    }
 }
 
 export interface EscrowLockResult {

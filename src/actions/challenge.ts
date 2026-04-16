@@ -2,9 +2,9 @@
 
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { calculateFeeBps, creditWallet, debitWallet, getWalletBalance, lockEscrow, refundEscrow } from "@/lib/wallet";
+import { calculateFeeBps, creditWallet, debitWallet, getWalletBalance, refundEscrow } from "@/lib/wallet";
 import { getFundingPayoutPolicy, getInvitationAcceptancePlan } from "@/lib/challenge-funding";
-import { DepositStatus, VerificationMethod } from "@prisma/client";
+import { DepositStatus, Prisma, VerificationMethod } from "@prisma/client";
 import markets from "@/data/markets.json";
 import { z } from "zod";
 import { unstable_cache } from "next/cache";
@@ -467,15 +467,23 @@ export async function createChallengeAction(input: z.infer<typeof createChalleng
       },
     });
 
+    const escrowResult = await tx.$queryRaw<
+      { new_balance: number; escrow_lock_id: string }[]
+    >(
+      Prisma.sql`SELECT * FROM lock_escrow(
+      ${session.user!.id},
+      ${challenge.id}::uuid,
+      ${creatorLockAmount},
+      ${Prisma.sql`NULL`}
+    )`
+    );
+
+    if (!escrowResult || escrowResult.length === 0) {
+      throw new Error(`lock_escrow returned no result for user ${session.user!.id}`);
+    }
+
     return challenge;
   });
-
-  try {
-    await lockEscrow(session.user.id, created.id, creatorLockAmount);
-  } catch {
-    await db.challenge.delete({ where: { id: created.id } });
-    return { error: "Unable to lock challenge funds. Challenge was cancelled. Please try again." };
-  }
 
   // ── Fire-and-forget email notifications ──
   // Note: totalPoolCents already computed above (line ~383)
@@ -567,12 +575,28 @@ export async function acceptChallengeInvitationAction(invitationId: string) {
         error: `Insufficient wallet balance. Required ${(acceptancePlan.lockAmountCents / 100).toFixed(2)} KES.`,
       };
     }
-
-    await lockEscrow(session.user.id, invitation.challengeId, acceptancePlan.lockAmountCents);
   }
 
   const result = await db.$transaction(async (tx) => {
     const txDb: typeof prismaDb = tx as unknown as typeof prismaDb;
+
+    if (acceptancePlan.inviteeMustDeposit) {
+      const escrowResult = await tx.$queryRaw<
+        { new_balance: number; escrow_lock_id: string }[]
+      >(
+        Prisma.sql`SELECT * FROM lock_escrow(
+      ${session.user!.id},
+      ${invitation.challengeId}::uuid,
+      ${acceptancePlan.lockAmountCents},
+      ${Prisma.sql`NULL`}
+    )`
+      );
+
+      if (!escrowResult || escrowResult.length === 0) {
+        throw new Error(`lock_escrow returned no result for user ${session.user!.id}`);
+      }
+    }
+
     await txDb.challengeInvitation.update({
       where: { id: invitation.id },
       data: {

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db"
-import { debitWallet, creditWallet } from "@/lib/wallet"
+import { LedgerEntryType, Prisma } from "@prisma/client"
+import { enqueueSettlementOutboxEventTx } from "@/lib/reliability"
 import {
     calculateMarketOdds,
     calculateWinnerPayout,
@@ -12,7 +13,17 @@ import {
 import {
     assessBetRisk,
     formatRiskMessage,
+    type RiskAssessment,
 } from "@/lib/risk-engine"
+import {
+    assessBetFraud,
+    formatFraudMessage,
+} from "@/lib/fraud-engine"
+import {
+    deriveFraudCooldown,
+    getActiveCooldown,
+    getMaxCooldownWindowMinutes,
+} from "@/lib/fraud-enforcement"
 import markets from "@/data/markets.json"
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -35,7 +46,10 @@ export interface BetPlacementResult {
     estimatedReturnCents?: number
     error?: string
     riskFlags?: Array<{ code: string; message: string; severity: string }>
+    fraudFlags?: Array<{ code: string; message: string; severity: string }>
     maxAllowedStakeCents?: number
+    retryAfterSeconds?: number
+    cooldownEndsAt?: string
 }
 
 export interface MarketResolutionResult {
@@ -46,6 +60,179 @@ export interface MarketResolutionResult {
     totalRefundedBets: number
     houseRevenueCents: number
     totalPayoutCents: number
+}
+
+export interface ResolvedMarketSummary {
+    marketId: string
+    winningOutcome: string
+    status: "RESOLVED" | "CANCELLED"
+    totalWinners: number
+    totalLosers: number
+    totalRefundedBets: number
+    totalRefundedCents: number
+    houseRevenueCents: number
+    totalPayoutCents: number
+}
+
+type TxClient = Prisma.TransactionClient
+
+async function creditWalletInTx(
+    tx: TxClient,
+    userId: string,
+    amountCents: number,
+    entryType: LedgerEntryType,
+    description: string,
+    transactionId?: string
+): Promise<{ newBalance: number; ledgerEntryId: string }> {
+    const safeAmount = Math.trunc(amountCents)
+    if (safeAmount <= 0) {
+        throw new Error(`Credit amount must be positive. Got: ${safeAmount}`)
+    }
+
+    const wallet = await tx.wallet.upsert({
+        where: { userId },
+        update: {},
+        create: { userId, balance: 0 },
+    })
+
+    await tx.wallet.update({
+        where: { id: wallet.id },
+        data: { balance: { increment: safeAmount } },
+    })
+
+    const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { balance: true },
+    })
+    const newBalance = updatedWallet?.balance ?? 0
+
+    const ledger = await tx.ledgerEntry.create({
+        data: {
+            userId,
+            walletId: wallet.id,
+            transactionId,
+            entryType,
+            amount: safeAmount,
+            balanceAfter: newBalance,
+            description,
+        },
+    })
+
+    return { newBalance, ledgerEntryId: ledger.id }
+}
+
+async function debitWalletInTx(
+    tx: TxClient,
+    userId: string,
+    amountCents: number,
+    entryType: LedgerEntryType,
+    description: string,
+    transactionId?: string
+): Promise<{ newBalance: number; ledgerEntryId: string }> {
+    const safeAmount = Math.trunc(amountCents)
+    if (safeAmount <= 0) {
+        throw new Error(`Debit amount must be positive. Got: ${safeAmount}`)
+    }
+
+    const wallet = await tx.wallet.upsert({
+        where: { userId },
+        update: {},
+        create: { userId, balance: 0 },
+    })
+
+    const debitResult = await tx.wallet.updateMany({
+        where: {
+            id: wallet.id,
+            balance: { gte: safeAmount },
+        },
+        data: {
+            balance: { decrement: safeAmount },
+        },
+    })
+
+    if (debitResult.count === 0) {
+        const latest = await tx.wallet.findUnique({
+            where: { id: wallet.id },
+            select: { balance: true },
+        })
+        throw new Error(`Insufficient funds. Balance: ${latest?.balance ?? 0}, Requested: ${safeAmount}`)
+    }
+
+    const updatedWallet = await tx.wallet.findUnique({
+        where: { id: wallet.id },
+        select: { balance: true },
+    })
+    const newBalance = updatedWallet?.balance ?? 0
+
+    const ledger = await tx.ledgerEntry.create({
+        data: {
+            userId,
+            walletId: wallet.id,
+            transactionId,
+            entryType,
+            amount: safeAmount,
+            balanceAfter: newBalance,
+            description,
+        },
+    })
+
+    return { newBalance, ledgerEntryId: ledger.id }
+}
+
+export async function getMarketSettlementSummary(
+    marketId: string
+): Promise<ResolvedMarketSummary | null> {
+    const poolRows = await db.marketPool.findMany({
+        where: { marketId },
+        select: {
+            status: true,
+            winningOutcome: true,
+            totalStakeCents: true,
+        },
+    })
+
+    if (poolRows.length === 0) {
+        return null
+    }
+
+    const status = poolRows[0].status
+    if (status !== "RESOLVED" && status !== "CANCELLED") {
+        return null
+    }
+
+    const bets = await db.marketBet.findMany({
+        where: { marketId },
+        select: {
+            status: true,
+            actualReturnCents: true,
+        },
+    })
+
+    const totalWinners = bets.filter((b) => b.status === "WON").length
+    const totalLosers = bets.filter((b) => b.status === "LOST").length
+    const totalRefundedBets = bets.filter((b) => b.status === "REFUNDED").length
+    const totalRefundedCents = bets.reduce((sum, bet) => {
+        return bet.status === "REFUNDED" ? sum + (bet.actualReturnCents ?? 0) : sum
+    }, 0)
+    const totalPayoutCents = bets.reduce((sum, bet) => {
+        return bet.status === "WON" ? sum + (bet.actualReturnCents ?? 0) : sum
+    }, 0)
+
+    const totalPoolCents = poolRows.reduce((sum, row) => sum + row.totalStakeCents, 0)
+    const houseRevenueCents =
+        status === "RESOLVED" ? Math.max(0, totalPoolCents - totalPayoutCents) : 0
+
+    return {
+        marketId,
+        winningOutcome: poolRows[0].winningOutcome ?? "",
+        status,
+        totalWinners,
+        totalLosers,
+        totalRefundedBets,
+        totalRefundedCents,
+        houseRevenueCents,
+        totalPayoutCents,
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -167,23 +354,53 @@ export async function placeBet(
     stakeCents: number,
     walletBalanceCents: number
 ): Promise<BetPlacementResult> {
+    const dbNowRows = await db.$queryRaw<{ now: Date }[]>(Prisma.sql`SELECT NOW() AS now`)
+    const dbNow = dbNowRows[0]?.now ?? new Date()
+
     // 1. Validate market exists in static config
     const staticMarket = getStaticMarket(marketId)
     if (!staticMarket) {
         return { success: false, error: `Market "${marketId}" not found.` }
     }
 
+    // Phase 4.1: enforce any active fraud cooldown lockout before additional checks.
+    const latestCooldown = await db.auditLog.findFirst({
+        where: {
+            userId,
+            action: "MARKET_BET_COOLDOWN_APPLIED",
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+            metadata: true,
+        },
+    })
+
+    const cooldownMetadata = latestCooldown?.metadata as { expiresAt?: string } | null
+    const cooldownExpiresRaw = cooldownMetadata?.expiresAt
+    if (cooldownExpiresRaw) {
+        const activeCooldown = getActiveCooldown(new Date(cooldownExpiresRaw), dbNow)
+        if (activeCooldown) {
+            return {
+                success: false,
+                error: "Betting is temporarily locked due to repeated suspicious attempts. Please try again after cooldown.",
+                retryAfterSeconds: activeCooldown.retryAfterSeconds,
+                cooldownEndsAt: activeCooldown.expiresAt.toISOString(),
+            }
+        }
+    }
+
     const validOutcomes = staticMarket.options.map((o) => o.name)
 
     // 2. Check if market pool is open (DB check)
     const existingPool = await db.marketPool.findFirst({
-        where: { marketId, outcome: validOutcomes[0] }, // representative row
+        where: { marketId },
+        orderBy: { updatedAt: "desc" },
         select: { status: true, closesAt: true, houseMarginBps: true },
     })
 
     // If no pool exists yet, the market is technically open — it will be created
     const marketStatus = existingPool?.status ?? "OPEN"
-    const closesAt = existingPool?.closesAt ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    const closesAt = existingPool?.closesAt ?? new Date(dbNow.getTime() + 30 * 24 * 60 * 60 * 1000)
     const houseMarginBps = existingPool?.houseMarginBps ?? 500
 
     if (marketStatus !== "OPEN") {
@@ -227,32 +444,192 @@ export async function placeBet(
             maxAllowedStakeCents: riskAssessment.maxAllowedStakeCents,
         }
     }
-    const { estimatedReturn, currentOdds } = estimatePotentialPayout(
-        stakeCents,
-        currentPool,
-        outcome,
-        houseMarginBps
-    )
 
-    // 5. Debit wallet first (outside Prisma tx — uses its own atomic tx)
-    let debitResult: { ledgerEntryId: string }
-    try {
-        debitResult = await debitWallet(
+    // 4c. Phase 4: Fraud behavior assessment (velocity + pattern checks)
+    const twoMinAgo = new Date(dbNow.getTime() - 2 * 60 * 1000)
+    const fiveMinAgo = new Date(dbNow.getTime() - 5 * 60 * 1000)
+    const fifteenMinAgo = new Date(dbNow.getTime() - 15 * 60 * 1000)
+
+    const recentBets = await db.marketBet.findMany({
+        where: {
             userId,
-            stakeCents,
-            undefined,
-            "DEBIT",
-            `Market bet: ${staticMarket.title} → ${outcome}`
-        )
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Unknown error"
-        return { success: false, error: `Wallet debit failed: ${message}` }
+            placedAt: { gte: fifteenMinAgo },
+        },
+        select: {
+            marketId: true,
+            stakeCents: true,
+            placedAt: true,
+        },
+    })
+
+    const betsLast2Min = recentBets.filter((bet) => bet.placedAt >= twoMinAgo).length
+    const betsLast5Min = recentBets.filter((bet) => bet.placedAt >= fiveMinAgo).length
+    const betsLast15Min = recentBets.length
+    const sameMarketBetsLast2Min = recentBets.filter(
+        (bet) => bet.marketId === marketId && bet.placedAt >= twoMinAgo
+    ).length
+    const identicalStakeCountLast15Min = recentBets.filter(
+        (bet) => bet.stakeCents === stakeCents
+    ).length
+    const stakeLast5MinCents = recentBets
+        .filter((bet) => bet.placedAt >= fiveMinAgo)
+        .reduce((sum, bet) => sum + bet.stakeCents, 0)
+
+    const fraudAssessment = assessBetFraud({
+        userId,
+        marketId,
+        outcome,
+        stakeCents,
+        betsLast2Min,
+        betsLast5Min,
+        betsLast15Min,
+        sameMarketBetsLast2Min,
+        identicalStakeCountLast15Min,
+        stakeLast5MinCents,
+    })
+
+    if (fraudAssessment.level === "BLOCKED") {
+        const blockedLog = await db.auditLog.create({
+            data: {
+                userId,
+                action: "MARKET_BET_FRAUD_BLOCKED",
+                metadata: JSON.parse(JSON.stringify({
+                    marketId,
+                    outcome,
+                    stakeCents,
+                    fraudScore: fraudAssessment.score,
+                    fraudFlags: fraudAssessment.flags,
+                    velocity: {
+                        betsLast2Min,
+                        betsLast5Min,
+                        betsLast15Min,
+                        sameMarketBetsLast2Min,
+                        identicalStakeCountLast15Min,
+                        stakeLast5MinCents,
+                    },
+                })),
+            },
+        }).catch(() => {
+            return null
+        })
+
+        let retryAfterSeconds: number | undefined
+        let cooldownEndsAt: string | undefined
+
+        const maxWindowMinutes = getMaxCooldownWindowMinutes()
+        const since = new Date(dbNow.getTime() - maxWindowMinutes * 60 * 1000)
+        const recentBlocks = await db.auditLog.findMany({
+            where: {
+                userId,
+                action: "MARKET_BET_FRAUD_BLOCKED",
+                createdAt: { gte: since },
+            },
+            orderBy: { createdAt: "desc" },
+            select: { createdAt: true },
+        }).catch(() => [])
+
+        const cooldownPolicy = deriveFraudCooldown(recentBlocks.map((row) => row.createdAt))
+        if (cooldownPolicy) {
+            const expiresAt = new Date(dbNow.getTime() + cooldownPolicy.cooldownMinutes * 60 * 1000)
+            const activeCooldown = getActiveCooldown(expiresAt, dbNow)
+            retryAfterSeconds = activeCooldown?.retryAfterSeconds
+            cooldownEndsAt = expiresAt.toISOString()
+
+            await db.auditLog.create({
+                data: {
+                    userId,
+                    action: "MARKET_BET_COOLDOWN_APPLIED",
+                    metadata: JSON.parse(JSON.stringify({
+                        marketId,
+                        outcome,
+                        triggerLogId: blockedLog?.id,
+                        blockedAttemptsInWindow: cooldownPolicy.blockedAttempts,
+                        windowMinutes: cooldownPolicy.windowMinutes,
+                        cooldownMinutes: cooldownPolicy.cooldownMinutes,
+                        expiresAt: cooldownEndsAt,
+                    })),
+                },
+            }).catch(() => {
+                // Cooldown telemetry is best-effort; block decision remains enforced.
+            })
+        }
+
+        const msg = formatFraudMessage(fraudAssessment)
+        return {
+            success: false,
+            error: msg ?? "Bet blocked by fraud controls. Please wait and try again.",
+            riskFlags: fraudAssessment.flags,
+            fraudFlags: fraudAssessment.flags,
+            retryAfterSeconds,
+            cooldownEndsAt,
+        }
     }
 
-    // 6. Upsert MarketPool + create MarketBet atomically
-    let betId: string
+    // 5. Debit wallet + upsert MarketPool + create MarketBet atomically
+    type PlacementTxResult =
+        | { kind: "placed"; betId: string; oddsAtPlacement: number; estimatedReturnCents: number }
+        | { kind: "risk-blocked"; assessment: RiskAssessment }
+
     try {
-        const result = await db.$transaction(async (tx) => {
+        const result = await db.$transaction<PlacementTxResult>(async (tx) => {
+            // Lock all existing pool rows for this market so concurrent transactions cannot
+            // race past exposure checks based on stale snapshots.
+            await tx.$queryRaw(
+                Prisma.sql`SELECT id FROM "MarketPool" WHERE "marketId" = ${marketId} FOR UPDATE`
+            )
+
+            const txPoolRows = await tx.marketPool.findMany({
+                where: { marketId },
+                select: { outcome: true, totalStakeCents: true },
+            })
+
+            const txCurrentPool: OutcomePools = {}
+            for (const opt of staticMarket.options) {
+                txCurrentPool[opt.name] = 0
+            }
+            for (const row of txPoolRows) {
+                txCurrentPool[row.outcome] = row.totalStakeCents
+            }
+
+            const txExistingBetAgg = await tx.marketBet.aggregate({
+                where: { userId, marketId, outcome, status: "PENDING" },
+                _sum: { stakeCents: true },
+            })
+            const txUserExistingStakeOnOutcome = txExistingBetAgg._sum.stakeCents ?? 0
+
+            const txRiskAssessment = assessBetRisk({
+                userId,
+                marketId,
+                outcome,
+                stakeCents,
+                currentPools: txCurrentPool,
+                userExistingStakeOnOutcome: txUserExistingStakeOnOutcome,
+                houseMarginBps,
+                marketClosesAt: closesAt,
+            })
+
+            if (txRiskAssessment.level === "BLOCKED") {
+                return {
+                    kind: "risk-blocked",
+                    assessment: txRiskAssessment,
+                }
+            }
+
+            const { estimatedReturn, currentOdds } = estimatePotentialPayout(
+                stakeCents,
+                txCurrentPool,
+                outcome,
+                houseMarginBps
+            )
+
+            const debitResult = await debitWalletInTx(
+                tx,
+                userId,
+                stakeCents,
+                "DEBIT",
+                `Market bet: ${staticMarket.title} → ${outcome}`
+            )
+
             // Upsert the pool row for this (marketId, outcome) pair
             const pool = await tx.marketPool.upsert({
                 where: { marketId_outcome: { marketId, outcome } },
@@ -296,14 +673,17 @@ export async function placeBet(
                         oddsAtPlacement: currentOdds,
                         estimatedReturn,
                         ledgerEntryId: debitResult.ledgerEntryId,
-                        riskLevel: riskAssessment.level,
-                        riskFlags: riskAssessment.flags.map((f) => f.code),
+                        riskLevel: txRiskAssessment.level,
+                        riskFlags: txRiskAssessment.flags.map((f) => f.code),
+                        fraudLevel: fraudAssessment.level,
+                        fraudScore: fraudAssessment.score,
+                        fraudFlags: fraudAssessment.flags.map((f) => f.code),
                     },
                 },
             })
 
             // Log separately if FLAGGED (for admin review queue)
-            if (riskAssessment.level === "FLAGGED") {
+            if (txRiskAssessment.level === "FLAGGED") {
                 await tx.auditLog.create({
                     data: {
                         userId,
@@ -312,36 +692,65 @@ export async function placeBet(
                             marketId,
                             outcome,
                             stakeCents,
-                            flags: riskAssessment.flags,
-                            imbalanceScore: riskAssessment.imbalanceScore,
-                            projectedLiabilityCents: riskAssessment.projectedLiabilityCents,
+                            flags: txRiskAssessment.flags,
+                            imbalanceScore: txRiskAssessment.imbalanceScore,
+                            projectedLiabilityCents: txRiskAssessment.projectedLiabilityCents,
                         })),
                     },
                 })
             }
 
-            return bet
+            if (fraudAssessment.level === "FLAGGED") {
+                await tx.auditLog.create({
+                    data: {
+                        userId,
+                        action: "MARKET_BET_FRAUD_FLAGGED",
+                        metadata: JSON.parse(JSON.stringify({
+                            marketId,
+                            outcome,
+                            stakeCents,
+                            fraudScore: fraudAssessment.score,
+                            flags: fraudAssessment.flags,
+                            velocity: {
+                                betsLast2Min,
+                                betsLast5Min,
+                                betsLast15Min,
+                                sameMarketBetsLast2Min,
+                                identicalStakeCountLast15Min,
+                                stakeLast5MinCents,
+                            },
+                        })),
+                    },
+                })
+            }
+
+            return {
+                kind: "placed",
+                betId: bet.id,
+                oddsAtPlacement: currentOdds,
+                estimatedReturnCents: estimatedReturn,
+            }
         })
 
-        betId = result.id
-    } catch (err: unknown) {
-        // Bet creation failed — refund the wallet debit
-        console.error("[MARKET_BET] Bet record creation failed, refunding wallet:", err)
-        await creditWallet(
-            userId,
-            stakeCents,
-            undefined,
-            "CREDIT",
-            `Bet placement refund (failed) — ${staticMarket.title} → ${outcome}`
-        )
-        return { success: false, error: "Bet placement failed. Your wallet has been refunded." }
-    }
+        if (result.kind === "risk-blocked") {
+            const msg = formatRiskMessage(result.assessment)
+            return {
+                success: false,
+                error: msg ?? "Bet blocked by risk engine. Please reduce your stake.",
+                riskFlags: result.assessment.flags,
+                maxAllowedStakeCents: result.assessment.maxAllowedStakeCents,
+            }
+        }
 
-    return {
-        success: true,
-        betId,
-        oddsAtPlacement: currentOdds,
-        estimatedReturnCents: estimatedReturn,
+        return {
+            success: true,
+            betId: result.betId,
+            oddsAtPlacement: result.oddsAtPlacement,
+            estimatedReturnCents: result.estimatedReturnCents,
+        }
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Unknown error"
+        return { success: false, error: `Bet placement failed: ${message}` }
     }
 }
 
@@ -368,7 +777,8 @@ export async function placeBet(
 export async function resolveMarket(
     marketId: string,
     winningOutcome: string,
-    resolvedByAdminId: string
+    resolvedByAdminId: string,
+    settlementToken?: string
 ): Promise<MarketResolutionResult> {
     const staticMarket = getStaticMarket(marketId)
     if (!staticMarket) {
@@ -392,13 +802,7 @@ export async function resolveMarket(
     const totalPool = odds.totalPoolCents
     const houseRevenueCents = odds.houseRevenueCents
 
-    // 2. Mark pool rows RESOLVED
-    await db.marketPool.updateMany({
-        where: { marketId },
-        data: { status: "RESOLVED", resolvedAt: new Date(), winningOutcome },
-    })
-
-    // 3. Fetch all pending bets
+    // 2. Fetch all pending bets
     const allBets = await db.marketBet.findMany({
         where: { marketId, status: "PENDING" },
         select: { id: true, userId: true, outcome: true, stakeCents: true },
@@ -410,6 +814,7 @@ export async function resolveMarket(
 
     // 4. Process each bet
     const payoutResults: Array<{ userId: string; betId: string; payout: PayoutResult }> = []
+    const payoutByBetId = new Map<string, PayoutResult>()
 
     for (const bet of allBets) {
         if (bet.outcome === winningOutcome) {
@@ -421,6 +826,7 @@ export async function resolveMarket(
                 houseMarginBps
             )
             payoutResults.push({ userId: bet.userId, betId: bet.id, payout })
+            payoutByBetId.set(bet.id, payout)
             totalWinners++
             totalPayoutCents += payout.totalReturnCents
         } else {
@@ -428,8 +834,13 @@ export async function resolveMarket(
         }
     }
 
-    // 5. Apply DB updates in one transaction
+    // 4. Apply full settlement atomically in one transaction
     await db.$transaction(async (tx) => {
+        await tx.marketPool.updateMany({
+            where: { marketId },
+            data: { status: "RESOLVED", resolvedAt: new Date(), winningOutcome },
+        })
+
         // Settle all bets
         for (const bet of allBets) {
             const isWinner = bet.outcome === winningOutcome
@@ -439,8 +850,34 @@ export async function resolveMarket(
                     status: isWinner ? "WON" : "LOST",
                     settledAt: new Date(),
                     actualReturnCents: isWinner
-                        ? payoutResults.find((r) => r.betId === bet.id)?.payout.totalReturnCents ?? 0
+                        ? payoutByBetId.get(bet.id)?.totalReturnCents ?? 0
                         : 0,
+                },
+            })
+        }
+
+        for (const { userId, betId, payout } of payoutResults) {
+            await creditWalletInTx(
+                tx,
+                userId,
+                payout.totalReturnCents,
+                "CREDIT",
+                `Market win: ${staticMarket.title} → ${winningOutcome} (${payout.oddsApplied}x odds)`
+            )
+
+            await tx.auditLog.create({
+                data: {
+                    userId,
+                    action: "MARKET_BET_WON",
+                    metadata: {
+                        marketId,
+                        betId,
+                        winningOutcome,
+                        stakeCents: payout.stakeCents,
+                        totalReturnCents: payout.totalReturnCents,
+                        profitCents: payout.profitCents,
+                        oddsApplied: payout.oddsApplied,
+                    },
                 },
             })
         }
@@ -453,6 +890,7 @@ export async function resolveMarket(
                 metadata: {
                     marketId,
                     winningOutcome,
+                    settlementToken,
                     totalWinners,
                     totalLosers,
                     totalPool,
@@ -461,34 +899,25 @@ export async function resolveMarket(
                 },
             },
         })
-    })
 
-    // 6. Credit winners (outside tx — each uses its own atomic wallet tx)
-    for (const { userId, betId, payout } of payoutResults) {
-        await creditWallet(
-            userId,
-            payout.totalReturnCents,
-            undefined,
-            "CREDIT",
-            `Market win: ${staticMarket.title} → ${winningOutcome} (${payout.oddsApplied}x odds)`
-        )
-
-        await db.auditLog.create({
-            data: {
-                userId,
-                action: "MARKET_BET_WON",
-                metadata: {
-                    marketId,
-                    betId,
-                    winningOutcome,
-                    stakeCents: payout.stakeCents,
-                    totalReturnCents: payout.totalReturnCents,
-                    profitCents: payout.profitCents,
-                    oddsApplied: payout.oddsApplied,
-                },
+        await enqueueSettlementOutboxEventTx(tx, {
+            eventKey: `market:${marketId}:resolved:${winningOutcome}`,
+            eventType: "MARKET_RESOLVED",
+            aggregateType: "MARKET",
+            aggregateId: marketId,
+            payload: {
+                marketId,
+                winningOutcome,
+                settlementToken,
+                totalWinners,
+                totalLosers,
+                totalPoolCents: totalPool,
+                houseRevenueCents,
+                totalPayoutCents,
+                occurredAt: new Date().toISOString(),
             },
         })
-    }
+    })
 
     return {
         marketId,
@@ -510,50 +939,66 @@ export async function resolveMarket(
  */
 export async function cancelMarket(
     marketId: string,
-    cancelledByAdminId: string
+    cancelledByAdminId: string,
+    settlementToken?: string
 ): Promise<{ refunded: number; totalRefundedCents: number }> {
     const staticMarket = getStaticMarket(marketId)
     if (!staticMarket) throw new Error(`Market "${marketId}" not found.`)
 
-    // Mark pool as cancelled
-    await db.marketPool.updateMany({
-        where: { marketId },
-        data: { status: "CANCELLED" },
-    })
-
-    // Fetch all pending bets
     const pendingBets = await db.marketBet.findMany({
         where: { marketId, status: "PENDING" },
         select: { id: true, userId: true, stakeCents: true },
     })
 
-    let totalRefundedCents = 0
+    const totalRefundedCents = pendingBets.reduce((sum, bet) => sum + bet.stakeCents, 0)
 
-    for (const bet of pendingBets) {
-        // Mark bet refunded
-        await db.marketBet.update({
-            where: { id: bet.id },
-            data: { status: "REFUNDED", settledAt: new Date(), actualReturnCents: bet.stakeCents },
+    await db.$transaction(async (tx) => {
+        await tx.marketPool.updateMany({
+            where: { marketId },
+            data: { status: "CANCELLED" },
         })
 
-        // Refund wallet
-        await creditWallet(
-            bet.userId,
-            bet.stakeCents,
-            undefined,
-            "CREDIT",
-            `Market cancelled refund: ${staticMarket.title}`
-        )
+        for (const bet of pendingBets) {
+            await tx.marketBet.update({
+                where: { id: bet.id },
+                data: { status: "REFUNDED", settledAt: new Date(), actualReturnCents: bet.stakeCents },
+            })
 
-        totalRefundedCents += bet.stakeCents
-    }
+            await creditWalletInTx(
+                tx,
+                bet.userId,
+                bet.stakeCents,
+                "CREDIT",
+                `Market cancelled refund: ${staticMarket.title}`
+            )
+        }
 
-    await db.auditLog.create({
-        data: {
-            userId: cancelledByAdminId,
-            action: "MARKET_CANCELLED",
-            metadata: { marketId, refunded: pendingBets.length, totalRefundedCents },
-        },
+        await tx.auditLog.create({
+            data: {
+                userId: cancelledByAdminId,
+                action: "MARKET_CANCELLED",
+                metadata: {
+                    marketId,
+                    refunded: pendingBets.length,
+                    totalRefundedCents,
+                    settlementToken,
+                },
+            },
+        })
+
+        await enqueueSettlementOutboxEventTx(tx, {
+            eventKey: `market:${marketId}:cancelled`,
+            eventType: "MARKET_CANCELLED",
+            aggregateType: "MARKET",
+            aggregateId: marketId,
+            payload: {
+                marketId,
+                settlementToken,
+                refundedBets: pendingBets.length,
+                totalRefundedCents,
+                occurredAt: new Date().toISOString(),
+            },
+        })
     })
 
     return { refunded: pendingBets.length, totalRefundedCents }

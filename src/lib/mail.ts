@@ -1,6 +1,16 @@
 import { Resend } from "resend";
 
-const domain = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+const fallbackDomain =
+  process.env.NODE_ENV === "production"
+    ? "https://stake-pesa.vercel.app"
+    : "http://localhost:3000";
+
+const domain =
+  process.env.NEXT_PUBLIC_APP_URL ||
+  process.env.AUTH_URL ||
+  process.env.NEXTAUTH_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined) ||
+  fallbackDomain;
 const year = new Date().getFullYear();
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key_for_build_purposes");

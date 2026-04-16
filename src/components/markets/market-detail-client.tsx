@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { placeBetAction, estimatePayoutAction } from "@/actions/market";
@@ -77,10 +77,33 @@ export function MarketDetailClient({
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
   const [estimate, setEstimate] = useState<{ returnCents: number; profitCents: number; odds: number } | null>(null);
   const [placedBet, setPlacedBet] = useState<{ outcome: string; stakeCents: number; odds: number } | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
 
   const stakeCents = Math.round((parseFloat(stakeKES) || 0) * 100);
   const isValidStake = stakeCents >= 1000; // min KES 10
-  const canBet = isLoggedIn && selectedOutcome && isValidStake;
+  const isCooldownActive = (cooldownSeconds ?? 0) > 0;
+  const canBet = isLoggedIn && selectedOutcome && isValidStake && !isCooldownActive;
+
+  useEffect(() => {
+    if (!isCooldownActive) return;
+
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => {
+        if (!prev || prev <= 1) {
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isCooldownActive]);
+
+  const formatCooldown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
 
   const showToast = (type: "success" | "error" | "info", msg: string) => {
     setToast({ type, msg });
@@ -125,6 +148,7 @@ export function MarketDetailClient({
         marketId: market.id,
         outcome: selectedOutcome,
         stakeCents,
+        requestId: crypto.randomUUID(),
       });
       if (res.success) {
         setPlacedBet({ outcome: selectedOutcome, stakeCents, odds: res.oddsAtPlacement! });
@@ -133,6 +157,14 @@ export function MarketDetailClient({
         setEstimate(null);
         showToast("success", `Bet placed at ${res.oddsAtPlacement?.toFixed(2)}x odds! 🎉`);
       } else {
+        if (typeof res.retryAfterSeconds === "number" && res.retryAfterSeconds > 0) {
+          setCooldownSeconds(res.retryAfterSeconds);
+          showToast(
+            "error",
+            `Bet locked for ${formatCooldown(res.retryAfterSeconds)} due to fraud cooldown.`
+          );
+          return;
+        }
         showToast("error", res.error ?? "Bet failed. Please try again.");
       }
     });
@@ -167,7 +199,7 @@ export function MarketDetailClient({
           ← Markets
         </Link>
         <span>/</span>
-        <span className="text-fg-secondary truncate max-w-[200px]">{market.title}</span>
+        <span className="text-fg-secondary truncate max-w-50">{market.title}</span>
       </div>
 
       {/* ── Market header ── */}
@@ -392,6 +424,11 @@ export function MarketDetailClient({
             {stakeCents > walletBalanceCents && isLoggedIn && (
               <p className="text-[11px] font-mono text-red">Insufficient wallet balance</p>
             )}
+            {isCooldownActive && (
+              <p className="text-[11px] font-mono text-amber">
+                Betting cooldown active: {formatCooldown(cooldownSeconds ?? 0)} remaining
+              </p>
+            )}
 
             {/* Place bet button */}
             <motion.button
@@ -413,7 +450,7 @@ export function MarketDetailClient({
                   </svg>
                   Placing bet…
                 </span>
-              ) : !selectedOutcome ? "Select an outcome" : !isValidStake ? "Enter stake (min KES 10)" : `Bet ${stakeKES ? `KES ${parseFloat(stakeKES).toLocaleString()}` : ""} on ${selectedOutcome}`}
+              ) : isCooldownActive ? `Locked ${formatCooldown(cooldownSeconds ?? 0)}` : !selectedOutcome ? "Select an outcome" : !isValidStake ? "Enter stake (min KES 10)" : `Bet ${stakeKES ? `KES ${parseFloat(stakeKES).toLocaleString()}` : ""} on ${selectedOutcome}`}
             </motion.button>
 
             <p className="text-[10px] font-mono text-fg-muted text-center">

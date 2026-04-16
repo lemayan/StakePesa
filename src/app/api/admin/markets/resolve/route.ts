@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server"
+import { createHash } from "node:crypto"
 import { auth } from "@/auth"
 import { db } from "@/lib/db"
-import { resolveMarket, cancelMarket } from "@/lib/market-betting"
+import { resolveMarket, cancelMarket, getMarketSettlementSummary } from "@/lib/market-betting"
+import { claimIdempotencyKey, completeIdempotencyKey, failIdempotencyKey } from "@/lib/reliability"
 import { z } from "zod"
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -64,27 +66,122 @@ export async function POST(request: Request) {
     }
 
     const data = parsed.data
+    const idempotencyScope = "admin-markets-resolve"
+    const idempotencyKey = request.headers.get("idempotency-key")?.trim()
+        || `auto:${admin.id}:${data.marketId}:${data.cancel === true ? "cancel" : `resolve:${data.winningOutcome}`}`
+    const requestHash = createHash("sha256")
+        .update(JSON.stringify(data))
+        .digest("hex")
+
+    const claim = await claimIdempotencyKey(idempotencyScope, idempotencyKey, requestHash)
+    if (claim.kind === "mismatch") {
+        return NextResponse.json(
+            { error: "Idempotency key reused with different payload." },
+            { status: 409 }
+        )
+    }
+    if (claim.kind === "completed") {
+        return NextResponse.json(claim.responseBody, { status: claim.responseStatus })
+    }
+    if (claim.kind === "in-progress") {
+        return NextResponse.json(
+            { error: "A request with this idempotency key is still processing." },
+            { status: 409 }
+        )
+    }
+
+    const idempotencyRecordId = claim.id
 
     try {
+        const currentState = await db.marketPool.findFirst({
+            where: { marketId: data.marketId },
+            orderBy: { updatedAt: "desc" },
+            select: { status: true, winningOutcome: true },
+        })
+
         if (data.cancel === true) {
+            if (currentState?.status === "CANCELLED") {
+                const summary = await getMarketSettlementSummary(data.marketId)
+                const responseBody = {
+                    success: true,
+                    action: "CANCELLED",
+                    idempotentReplay: true,
+                    idempotencyKey,
+                    refunded: summary?.totalRefundedBets ?? 0,
+                    totalRefundedCents: summary?.totalRefundedCents ?? 0,
+                }
+                await completeIdempotencyKey(idempotencyRecordId, 200, responseBody)
+                return NextResponse.json(responseBody)
+            }
+
+            if (currentState?.status === "RESOLVED") {
+                const responseBody = { error: "Market already resolved; cannot cancel after resolution." }
+                await completeIdempotencyKey(idempotencyRecordId, 409, responseBody)
+                return NextResponse.json(responseBody, { status: 409 })
+            }
+
             // Cancel market — refund all bets
-            const result = await cancelMarket(data.marketId, admin.id!)
-            return NextResponse.json({
+            const result = await cancelMarket(data.marketId, admin.id!, idempotencyKey)
+            const responseBody = {
                 success: true,
                 action: "CANCELLED",
+                idempotencyKey,
                 ...result,
-            })
+            }
+            await completeIdempotencyKey(idempotencyRecordId, 200, responseBody)
+            return NextResponse.json(responseBody)
         } else {
+            if (currentState?.status === "RESOLVED") {
+                if (currentState.winningOutcome !== data.winningOutcome) {
+                    const responseBody = {
+                        error: `Market already resolved with outcome \"${currentState.winningOutcome}\". Cannot re-resolve with \"${data.winningOutcome}\".`,
+                    }
+                    await completeIdempotencyKey(idempotencyRecordId, 409, responseBody)
+                    return NextResponse.json(responseBody, { status: 409 })
+                }
+
+                const summary = await getMarketSettlementSummary(data.marketId)
+                const responseBody = {
+                    success: true,
+                    action: "RESOLVED",
+                    idempotentReplay: true,
+                    idempotencyKey,
+                    marketId: data.marketId,
+                    winningOutcome: data.winningOutcome,
+                    totalWinners: summary?.totalWinners ?? 0,
+                    totalLosers: summary?.totalLosers ?? 0,
+                    totalRefundedBets: summary?.totalRefundedBets ?? 0,
+                    houseRevenueCents: summary?.houseRevenueCents ?? 0,
+                    totalPayoutCents: summary?.totalPayoutCents ?? 0,
+                }
+                await completeIdempotencyKey(idempotencyRecordId, 200, responseBody)
+                return NextResponse.json(responseBody)
+            }
+
+            if (currentState?.status === "CANCELLED") {
+                const responseBody = { error: "Market already cancelled; cannot resolve a cancelled market." }
+                await completeIdempotencyKey(idempotencyRecordId, 409, responseBody)
+                return NextResponse.json(responseBody, { status: 409 })
+            }
+
             // Resolve market with winning outcome
-            const result = await resolveMarket(data.marketId, data.winningOutcome!, admin.id!)
-            return NextResponse.json({
+            const result = await resolveMarket(data.marketId, data.winningOutcome!, admin.id!, idempotencyKey)
+            const responseBody = {
                 success: true,
                 action: "RESOLVED",
+                idempotencyKey,
                 ...result,
-            })
+            }
+            await completeIdempotencyKey(idempotencyRecordId, 200, responseBody)
+            return NextResponse.json(responseBody)
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Unknown error"
+        try {
+            await failIdempotencyKey(idempotencyRecordId, message)
+        } catch (idempotencyErr) {
+            console.error("[ADMIN_RESOLVE_MARKET][IDEMPOTENCY_FAIL]", idempotencyErr)
+        }
         console.error("[ADMIN_RESOLVE_MARKET]", err)
         return NextResponse.json({ error: message }, { status: 500 })
     }
