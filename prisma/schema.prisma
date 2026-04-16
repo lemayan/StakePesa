@@ -44,6 +44,20 @@ enum BetStatus {
   REFUNDED
 }
 
+enum MarketStatus {
+  OPEN      // Accepting bets
+  CLOSED    // Betting window ended, awaiting resolution
+  RESOLVED  // Winner declared, payouts processed
+  CANCELLED // Market voided, all bets refunded
+}
+
+enum MarketBetStatus {
+  PENDING   // Bet placed, market still open
+  WON       // User picked the winning outcome
+  LOST      // User picked a losing outcome
+  REFUNDED  // Market was cancelled — stake returned
+}
+
 enum TransactionType {
   VERIFY
   DEPOSIT
@@ -121,6 +135,7 @@ model User {
   mpesaTransactions     MpesaTransaction[]
   intaSendTransactions  IntaSendTransaction[]
   betParticipants       BetParticipant[]
+  marketBets            MarketBet[]
   ledgerEntries         LedgerEntry[]
   createdChallenges     Challenge[]            @relation("ChallengeCreator")
   refereedChallenges    Challenge[]            @relation("ChallengeReferee")
@@ -466,4 +481,59 @@ model MarketOption {
 
   @@unique([marketId, optionName])
   @@index([marketId])
+}
+
+// ──────────────────────────────────────────────
+// PARI-MUTUEL MARKET BETTING (Phase 1 Odds Engine)
+// ──────────────────────────────────────────────
+
+/// Tracks the live pooled stakes for each outcome in a public market.
+/// One row per (marketId, outcome) pair. Updated atomically on every bet.
+/// This is the "live pool" that the odds engine reads to compute odds.
+model MarketPool {
+  id             String       @id @default(uuid())
+  marketId       String       // matches market.id from markets.json
+  outcome        String       // e.g. "Arsenal", "YES", "William Ruto"
+  totalStakeCents Int         @default(0) // sum of all bets on this outcome (KES cents)
+  betCount       Int          @default(0) // number of individual bets
+  status         MarketStatus @default(OPEN)
+  closesAt       DateTime     // window when betting stops
+  resolvedAt     DateTime?    // when admin/oracle resolves
+  winningOutcome String?      // set at resolution time
+  houseMarginBps Int          @default(500) // 5% default
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  bets MarketBet[]
+
+  @@unique([marketId, outcome])
+  @@index([marketId])
+  @@index([status])
+  @@index([closesAt])
+}
+
+/// A single user's bet on one outcome of a market.
+/// Immutable once created — any changes go through status updates only.
+model MarketBet {
+  id             String          @id @default(uuid())
+  userId         String
+  marketId       String          // matches market.id from markets.json
+  marketPoolId   String          // FK to MarketPool (marketId + outcome)
+  outcome        String          // outcome chosen at bet time
+  stakeCents     Int             // KES cents staked
+  oddsAtPlacement Float          // decimal odds snapshotted when bet was placed
+  estimatedReturn Int            // estimated payout at placement (informational)
+  actualReturnCents Int?         // set at payout time
+  status         MarketBetStatus @default(PENDING)
+  placedAt       DateTime        @default(now())
+  settledAt      DateTime?       // when won/lost/refunded was set
+
+  user       User       @relation(fields: [userId], references: [id])
+  marketPool MarketPool @relation(fields: [marketPoolId], references: [id])
+
+  @@index([userId])
+  @@index([marketId])
+  @@index([marketPoolId])
+  @@index([status])
+  @@index([placedAt])
 }
