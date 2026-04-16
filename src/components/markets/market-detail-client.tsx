@@ -151,21 +151,24 @@ export function MarketDetailClient({
         requestId: crypto.randomUUID(),
       });
       if (res.success) {
-        setPlacedBet({ outcome: selectedOutcome, stakeCents, odds: res.oddsAtPlacement! });
+        const oddsAtPlacement = typeof res.oddsAtPlacement === "number" ? res.oddsAtPlacement : 0;
+        setPlacedBet({ outcome: selectedOutcome, stakeCents, odds: oddsAtPlacement });
         setSelectedOutcome(null);
         setStakeKES("");
         setEstimate(null);
-        showToast("success", `Bet placed at ${res.oddsAtPlacement?.toFixed(2)}x odds! 🎉`);
+        showToast("success", `Bet placed at ${oddsAtPlacement.toFixed(2)}x odds! 🎉`);
       } else {
-        if (typeof res.retryAfterSeconds === "number" && res.retryAfterSeconds > 0) {
-          setCooldownSeconds(res.retryAfterSeconds);
+        const retryAfterSeconds = typeof res.retryAfterSeconds === "number" ? res.retryAfterSeconds : 0;
+        if (retryAfterSeconds > 0) {
+          setCooldownSeconds(retryAfterSeconds);
           showToast(
             "error",
-            `Bet locked for ${formatCooldown(res.retryAfterSeconds)} due to fraud cooldown.`
+            `Bet locked for ${formatCooldown(retryAfterSeconds)} due to fraud cooldown.`
           );
           return;
         }
-        showToast("error", res.error ?? "Bet failed. Please try again.");
+        const errorMessage = typeof res.error === "string" ? res.error : "Bet failed. Please try again.";
+        showToast("error", errorMessage);
       }
     });
   };
