@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion, Variants } from "framer-motion";
+import { useAnimationControls } from "framer-motion";
 
 interface LogoProps {
   className?: string;
@@ -8,105 +10,141 @@ interface LogoProps {
   textSize?: string;
 }
 
-export function Logo({ className = "", iconSize = 42, textSize = "text-[24px]" }: LogoProps) {
-  // Aggressive separation and crashing together
+export function Logo({ className = "", iconSize = 36, textSize = "text-[20px]" }: LogoProps) {
+  const controls = useAnimationControls();
+
+  useEffect(() => {
+    let active = true;
+
+    const run = async () => {
+      await controls.start("visible");
+      if (active) {
+        controls.start("pulse");
+      }
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+      controls.stop();
+    };
+  }, [controls]);
+
+  // Keep motion focused on the rings so surrounding UI stays visually stable.
   const leftRing: Variants = {
-    hidden: { x: -40, rotate: -15, opacity: 0 },
+    hidden: { x: -18, rotate: -8, opacity: 0 },
     visible: {
       x: 0,
       rotate: 0,
       opacity: 1,
-      // Massive stiff spring for aggressive snap
-      transition: { type: "spring", stiffness: 800, damping: 20, delay: 0.1 }
+      transition: { type: "spring", stiffness: 420, damping: 22, delay: 0.1 }
+    },
+    pulse: {
+      x: [0, -10, 0, -8, 0],
+      rotate: [0, -2, 0.8, -1, 0],
+      transition: { duration: 0.55, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" },
     },
     hover: {
-      x: -12,
-      rotate: -5,
-      transition: { type: "spring", stiffness: 400, damping: 15 }
-    }
+      x: [0, -10, 0, -8, 0],
+      rotate: [0, -2, 0.8, -1, 0],
+      transition: { duration: 0.55, repeat: Infinity, ease: "easeInOut" },
+    },
   };
 
   const rightRing: Variants = {
-    hidden: { x: 40, rotate: 15, opacity: 0 },
+    hidden: { x: 18, rotate: 8, opacity: 0 },
     visible: {
       x: 0,
       rotate: 0,
       opacity: 1,
-      // Massive stiff spring for aggressive snap
-      transition: { type: "spring", stiffness: 800, damping: 20, delay: 0.1 }
+      transition: { type: "spring", stiffness: 420, damping: 22, delay: 0.1 }
+    },
+    pulse: {
+      x: [0, 10, 0, 8, 0],
+      rotate: [0, 2, -0.8, 1, 0],
+      transition: { duration: 0.55, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" },
     },
     hover: {
-      x: 12,
-      rotate: 5,
-      transition: { type: "spring", stiffness: 400, damping: 15 }
-    }
+      x: [0, 10, 0, 8, 0],
+      rotate: [0, 2, -0.8, 1, 0],
+      transition: { duration: 0.55, repeat: Infinity, ease: "easeInOut" },
+    },
   };
 
   const interlock: Variants = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 0, scale: 0.8 },
     visible: { 
       opacity: 1, 
-      transition: { duration: 0.05, delay: 0.28 } // Fades in EXACTLY at the crash
+      scale: 1,
+      transition: { duration: 0.15, delay: 0.3 } 
     },
-    hover: { 
-      opacity: 0, 
-      transition: { duration: 0.1 } 
-    } 
-  };
-
-  // The explosive "Light" flare when they crash
-  const glowCrash: Variants = {
-    hidden: { scale: 0.1, opacity: 0, filter: "blur(0px)" },
-    visible: {
-      scale: [0.1, 2.5, 1],
-      opacity: [0, 0.8, 0],
-      filter: ["blur(0px)", "blur(20px)", "blur(30px)"],
-      transition: { duration: 1.2, delay: 0.25, ease: "easeOut" }
+    pulse: {
+      opacity: [1, 0, 1, 0.35, 1],
+      transition: { duration: 0.55, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" },
     },
     hover: {
-      scale: 1.6,
-      opacity: 0.3,
-      filter: "blur(20px)",
-      transition: { repeat: Infinity, repeatType: "mirror", duration: 1.2 }
+      opacity: [1, 0, 1, 0.35, 1],
+      transition: { duration: 0.55, repeat: Infinity, ease: "easeInOut" },
+    }, // Fade bridge so split rings read clearly
+  };
+
+  const glowPulse: Variants = {
+    hidden: { scale: 0.5, opacity: 0 },
+    visible: {
+      scale: [0.5, 2, 1],
+      opacity: [0, 0.4, 0],
+      transition: { duration: 0.8, delay: 0.25, ease: "easeOut" }
+    },
+    pulse: {
+      scale: [1, 1.16, 1],
+      opacity: [0, 0.14, 0],
+      transition: { duration: 0.55, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" },
+    },
+    hover: {
+      scale: 1.15,
+      opacity: 0.14,
+      transition: { repeat: Infinity, repeatType: "mirror", duration: 1.1 }
     }
   };
 
   return (
     <motion.div 
-      className={`flex items-center gap-3 select-none cursor-pointer ${className}`}
+      className={`flex items-center gap-2.5 select-none cursor-pointer ${className}`}
       initial="hidden"
-      animate="visible"
+      animate={controls}
       whileHover="hover"
+      whileTap="hover"
     >
       <div className="relative flex items-center justify-center shrink-0">
         <svg 
-          width={iconSize * 1.1}
+          width={iconSize * 1.05}
           height={iconSize} 
           viewBox="0 0 100 100" 
           fill="none" 
           xmlns="http://www.w3.org/2000/svg"
-          className="drop-shadow-md relative z-10 overflow-visible"
+          className="drop-shadow-sm relative z-10 overflow-visible"
         >
-          {/* Explosive bright light flare */}
+          {/* Base glow circle behind rings - fires a pulse on load and gentle glow on hover */}
           <motion.circle
             cx="50"
             cy="50"
-            r="35"
-            fill="#FFFFFF"
-            className="mix-blend-overlay"
-            variants={glowCrash}
+            r="30"
+            fill="#F0B1B6"
+            className="blur-xl"
+            variants={glowPulse}
           />
           <motion.circle
             cx="50"
             cy="50"
-            r="38"
+            r="30"
             fill="#A2B2E6"
-            className="mix-blend-screen"
-            variants={glowCrash}
-            style={{ transitionDelay: "150px" }}
+            className="blur-xl mix-blend-screen"
+            variants={glowPulse}
+            style={{ transitionDelay: "100ms" }}
           />
 
-          {/* Right square (periwinkle blue) */}
+          {/* Right square (periwinkle blue) - drawn first so it's behind at the top intersection */}
           <motion.g variants={rightRing}>
             <rect 
               x="38.78" y="28.78" width="42.43" height="42.43" rx="8" 
@@ -115,7 +153,7 @@ export function Logo({ className = "", iconSize = 42, textSize = "text-[24px]" }
             />
           </motion.g>
           
-          {/* Left square (peachy pink) */}
+          {/* Left square (peachy pink) - drawn second so it overlaps at the top */}
           <motion.g variants={leftRing}>
             <rect 
               x="18.78" y="28.78" width="42.43" height="42.43" rx="8" 
@@ -124,7 +162,7 @@ export function Logo({ className = "", iconSize = 42, textSize = "text-[24px]" }
             />
           </motion.g>
           
-          {/* Interlock bridge */}
+          {/* Interlock fix is on its own layer so it can fade out and reveal the separation smoothly */}
           <motion.g variants={interlock}>
             <line 
               x1="40" y1="60" x2="56" y2="76" 
@@ -134,15 +172,9 @@ export function Logo({ className = "", iconSize = 42, textSize = "text-[24px]" }
           </motion.g>
         </svg>
       </div>
-      <motion.span 
-        className={`font-black tracking-tighter text-fg font-sans ${textSize}`}
-        variants={{
-          hidden: { opacity: 0, x: -15 },
-          visible: { opacity: 1, x: 0, transition: { type: "spring", stiffness: 400, damping: 25, delay: 0.3 } }
-        }}
-      >
+      <span className={`font-bold tracking-tight text-fg font-sans ${textSize}`}>
         StakePesa
-      </motion.span>
+      </span>
     </motion.div>
   );
 }
