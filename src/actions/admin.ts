@@ -31,7 +31,11 @@ const sectorSchema = z.object({
 
 export async function createSectorAction(input: z.infer<typeof sectorSchema>) {
   await requireAdminSession()
-  const data = sectorSchema.parse(input)
+  const parsed = sectorSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid sector payload." }
+  }
+  const data = parsed.data
 
   const slug = slugify(data.slug || data.title)
   const sector = await db.sector.create({
@@ -53,7 +57,11 @@ const updateSectorSchema = sectorSchema.extend({
 
 export async function updateSectorAction(input: z.infer<typeof updateSectorSchema>) {
   await requireAdminSession()
-  const data = updateSectorSchema.parse(input)
+  const parsed = updateSectorSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid sector update payload." }
+  }
+  const data = parsed.data
 
   const slug = slugify(data.slug || data.title)
   const sector = await db.sector.update({
@@ -105,7 +113,11 @@ const createMarketSchema = z.object({
 
 export async function createAdminMarketAction(input: z.infer<typeof createMarketSchema>) {
   const session = await requireAdminSession()
-  const data = createMarketSchema.parse(input)
+  const parsed = createMarketSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid market payload." }
+  }
+  const data = parsed.data
 
   const startsAt = new Date(data.startsAt)
   const closesAt = new Date(data.closesAt)
@@ -255,7 +267,11 @@ const resolveSchema = z.object({
 
 export async function resolveAdminMarketAction(input: z.infer<typeof resolveSchema>) {
   const session = await requireAdminSession()
-  const data = resolveSchema.parse(input)
+  const parsed = resolveSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid resolve payload." }
+  }
+  const data = parsed.data
 
   const market = await db.adminMarket.findUnique({
     where: { id: data.marketId },
