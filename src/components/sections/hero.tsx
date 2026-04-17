@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { CandidateAvatar } from "@/components/ui/candidate-avatar";
-import rawMarketData from "@/data/markets.json";
 import { useSearchParams } from "next/navigation";
 
 /* ── Ticker Tape Data ── */
@@ -28,101 +26,56 @@ const pulseItems = [
   { title: "Harambee AFCON", change: "+1.2%", volume: "KES 760K" },
 ];
 
-/* ── Rich Multi-Outcome Custom Markets (Kalshi Style) ── */
-type Outcome = {
+/* ── Rich Multi-Outcome Custom Markets ── */
+export type Outcome = {
   id: string;
   name: string;
-  image?: string;
-  initials: string;
-  payout: string;
+  imageUrl: string | null;
   odds: number;
-  color: string;
-  history: number[];
+  payout: string;
 };
 
-type MarketDef = {
+export type TrendingMarket = {
   id: string;
   title: string;
-  volume: string;
-  news: string;
+  category: string;
+  volumeKES: string;
   outcomes: Outcome[];
 };
 
-function generateHistory(seedStr: string, start: number, end: number, points = 60) {
+export type SiteConfig = {
+  adText: string | null;
+  adUrl: string | null;
+  trendingMessage: string | null;
+};
+
+/* ── Generated Line History Helper ── */
+function generateDeterministicHistory(seedStr: string, currentOdds: number, points = 60) {
   let seed = 0;
   for (let i = 0; i < seedStr.length; i++) {
     seed += seedStr.charCodeAt(i);
   }
-  
   const pseudoRandom = () => {
     const x = Math.sin(seed++) * 10000;
     return x - Math.floor(x);
   };
-
+  const start = Math.max(2, Math.min(98, currentOdds + (pseudoRandom() * 20 - 10)));
   const res = [start];
   let curr = start;
   for (let i = 1; i < points - 1; i++) {
-    const trend = (end - start) / points;
+    const trend = (currentOdds - start) / points;
     curr += trend + (pseudoRandom() * 8 - 4);
     curr = Math.max(2, Math.min(98, curr));
     res.push(curr);
   }
-  res.push(end);
+  res.push(currentOdds);
   return res;
 }
- // Array of engaging colors for our outcomes
+
 const COLOR_PALETTE = ["#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#ef4444"];
 
-// Parse raw user data into the rich format we need for the UI component
-const KALSHI_MARKETS = (rawMarketData.markets as any[]).map((m: any, mIndex: number) => {
-  return {
-    id: m.id || `market_${mIndex}`,
-    category: (m.category || "").toLowerCase(),
-    title: m.title,
-    volume: m.category === "politics_presidential" ? "19,178,529" : 
-            m.category === "sports_epl" ? "24,500,000" :
-            "8,450,200", // We can parse real volume here later, using dummy for UI
-    
-    // Grab the first news item, format it for the UI
-    news: m.news && m.news.length > 0 
-      ? `News · ${m.news[0].headline}. ${m.news[0].summary}`
-      : "News · Market activity surging in early trading.",
-    
-    outcomes: (m.options as any[]).map((opt: any, oIndex: number): Outcome => {
-      // Create user-friendly initials, e.g. "William Ruto" -> "WR"
-      const initials = opt.name.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase();
-      
-      // Assume option.probability is 0.45 -> odds are 45
-      const odds = Math.max(1, Math.round(opt.probability * 100));
-      
-      // Calculate a rough payout (1 / probability)
-      const payoutVal = (1 / opt.probability).toFixed(1);
-
-      // Generate a deterministic start point
-      const seedValue = mIndex * 100 + oIndex;
-      const pseudoRand = (() => { const x = Math.sin(seedValue) * 10000; return x - Math.floor(x); })();
-
-      return {
-        id: `${m.id}_out_${oIndex}`,
-        name: opt.name,
-        initials,
-        // E.g., if prob is 0.45, payout is ~2.2x
-        payout: `${payoutVal}x`,
-        odds,
-        color: COLOR_PALETTE[oIndex % COLOR_PALETTE.length],
-        // Generate a deterministic historical line trace ending at current odds
-        history: generateHistory(
-          `${m.id}_${opt.name}`,
-          Math.max(2, Math.min(98, odds + (pseudoRand * 20 - 10))), // start point slightly offset
-          odds
-        )
-      };
-    }),
-  } as MarketDef;
-});
-
 /* ── Real SVG Chart Component (Matching Kalshi style) ── */
-function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: Outcome[]; activeHover: number | null; setActiveHover: (idx: number | null) => void }) {
+function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: (Outcome & { color: string, history: number[] })[]; activeHover: number | null; setActiveHover: (idx: number | null) => void }) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => setIsMounted(true), []);
 
@@ -230,52 +183,31 @@ function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: O
   );
 }
 
-/* ── Image data hook ──────────────────────────────────────────────── */
-
-type EntityType = "PERSON" | "SPORTS_TEAM" | "COMPETITION" | "CRYPTO" | "GENERIC";
-interface OptionImageData {
-  entityType: EntityType;
-  imageUrl: string | null;
-  imageSource: string | null;
-  imageVerified: boolean;
-  imageShape: "circle" | "square" | null;
-}
-type ImagesMap = Record<string, Record<string, OptionImageData>>;
-
-function useMarketImages(marketIds: string[]): ImagesMap {
-  const [images, setImages] = useState<ImagesMap>({});
-  useEffect(() => {
-    if (marketIds.length === 0) return;
-    fetch(`/api/market-images?marketIds=${marketIds.join(",")}`)
-      .then((r) => r.json())
-      .then((data) => { if (data?.images) setImages(data.images); })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [marketIds.join(",")]);
-  return images;
-}
-
 /* ── Main Hero Card ── */
-export function Hero() {
+interface HeroProps {
+  initialTrendingMarkets: TrendingMarket[];
+  siteConfig: SiteConfig | null;
+}
+
+export function Hero({ initialTrendingMarkets, siteConfig }: HeroProps) {
   const [marketIdx, setMarketIdx] = useState(0);
   const [activeHover, setActiveHover] = useState<number | null>(null);
 
-  // The Hero slider represents "Trending/Hot", which the user requested
-  // exclusively pulls from Kenyan Elections (Politics) and Sports.
   const trendingMarkets = React.useMemo(() => {
-    return KALSHI_MARKETS.filter(m => {
-      const cat = (m as any).category?.toLowerCase() || "";
-      return cat.includes("politics") || cat.includes("sports");
+    if (!initialTrendingMarkets || initialTrendingMarkets.length === 0) return [];
+    
+    // Map in standard UI elements
+    return initialTrendingMarkets.map((m) => {
+      return {
+        ...m,
+        outcomes: m.outcomes.map((o, oIdx) => ({
+          ...o,
+          color: COLOR_PALETTE[oIdx % COLOR_PALETTE.length],
+          history: generateDeterministicHistory(o.id, o.odds)
+        }))
+      }
     });
-  }, []);
-
-  // Fetch entity image data for all trending markets
-  const trendingMarketIds = React.useMemo(
-    () => trendingMarkets.map((m) => m.id),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [trendingMarkets.length]
-  );
-  const imagesMap = useMarketImages(trendingMarketIds);
+  }, [initialTrendingMarkets]);
 
   const market = trendingMarkets[marketIdx % trendingMarkets.length];
 
@@ -429,21 +361,11 @@ export function Hero() {
                       >
                         {/* Avatar + Name */}
                         <div className="flex items-center gap-3 min-w-[120px]">
-                          {(() => {
-                            const imgData = imagesMap[market.id]?.[outcome.name];
-                            return (
-                              <CandidateAvatar
-                                name={outcome.name}
-                                entityType={imgData?.entityType ?? null}
-                                imageUrl={imgData?.imageUrl ?? null}
-                                imageSource={imgData?.imageSource as any ?? null}
-                                imageVerified={imgData?.imageVerified ?? false}
-                                imageShape={imgData?.imageShape ?? null}
-                                size={28}
-                                className="shrink-0 shadow-sm sm:shadow-lg sm:w-[32px] sm:h-[32px] w-[28px] h-[28px]"
-                              />
-                            );
-                          })()}
+                          {outcome.imageUrl ? (
+                            <img src={outcome.imageUrl} alt={outcome.name} className="shrink-0 rounded-md object-cover shadow-sm sm:shadow-lg sm:w-[32px] sm:h-[32px] w-[28px] h-[28px]" />
+                          ) : (
+                            <CandidateAvatar name={outcome.name} size={28} className="shrink-0 shadow-sm sm:shadow-lg sm:w-[32px] sm:h-[32px] w-[28px] h-[28px]" />
+                          )}
                           {/* Hide text label for Yes/No — the chip already shows it */}
                           {(() => {
                             const lower = outcome.name.trim().toLowerCase();
@@ -486,15 +408,15 @@ export function Hero() {
 
                 <div className="mt-5 pt-3">
                   <div className="flex items-center justify-between text-[12px] font-medium text-fg-secondary mb-3">
-                    <p>KES {market.volume} vol</p>
-                    <p>{parseInt(market.volume.replace(/,/g, '')) % 100 + 40} markets</p>
+                    <p>KES {market.volumeKES} vol</p>
+                    <p>{siteConfig?.trendingMessage || "Trending automatically"}</p>
                   </div>
 
                   <div className="w-full h-px border-t border-dashed border-line/50 mb-3" />
 
                   <p className="text-[13px] font-normal text-fg-muted leading-snug line-clamp-3">
-                    <span className="text-fg-secondary font-bold">News &bull; </span>
-                    {market.news.replace("News · ", "")}
+                    <span className="text-fg-secondary font-bold">Category &bull; </span>
+                    {market.category}
                   </p>
                 </div>
               </div>
@@ -547,9 +469,17 @@ export function Hero() {
             </div>
           </div>
 
-          <span className="text-[11px] font-mono text-fg-muted border border-line rounded-md px-2 py-1 shrink-0">
-            Sponsored placements coming soon
-          </span>
+          {siteConfig?.adText && (
+            siteConfig.adUrl ? (
+              <a href={siteConfig.adUrl} target="_blank" rel="noopener noreferrer" className="text-[11px] font-mono text-fg bg-bg border border-line rounded-md px-3 py-1.5 shrink-0 hover:bg-bg-above transition uppercase">
+                {siteConfig.adText}
+              </a>
+            ) : (
+              <span className="text-[11px] font-mono text-fg bg-bg border border-line rounded-md px-3 py-1.5 shrink-0 uppercase">
+                {siteConfig.adText}
+              </span>
+            )
+          )}
         </motion.div>
       </div>
     </section>

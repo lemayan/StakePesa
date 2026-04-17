@@ -1,9 +1,11 @@
-import { getAdminDashboardDataAction } from "@/actions/admin"
+import { getAdminDashboardDataAction, getSiteConfigAction } from "@/actions/admin"
 import { SectorManagementPanel } from "@/components/admin/sector-management-panel"
+import { SiteConfigPanel } from "@/components/admin/site-config-panel"
 import { Settings2 } from "lucide-react"
 
 export default async function AdminSettingsPage() {
   const data = await getAdminDashboardDataAction()
+  const siteConfig = await getSiteConfigAction()
 
   return (
     <section className="space-y-6">
@@ -14,7 +16,8 @@ export default async function AdminSettingsPage() {
         </p>
       </header>
 
-      <div className="w-full">
+      <div className="w-full space-y-8">
+        <SiteConfigPanel initialConfig={siteConfig} />
         <SectorManagementPanel sectors={data.sectors} />
       </div>
     </section>

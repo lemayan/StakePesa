@@ -95,6 +95,7 @@ export async function deleteSectorAction(id: string) {
 
 const marketOutcomeSchema = z.object({
   name: z.string().trim().min(1).max(80),
+  imageUrl: z.string().trim().url().optional().or(z.literal("")),
   seedStakeCents: z.number().int().min(0),
 })
 
@@ -158,6 +159,7 @@ export async function createAdminMarketAction(input: z.infer<typeof createMarket
           data: {
             marketId: created.id,
             name: outcome.name,
+            imageUrl: outcome.imageUrl || null,
             seedStakeCents: outcome.seedStakeCents,
             orderIndex: index,
           },
@@ -371,4 +373,52 @@ export async function getAdminDashboardDataAction() {
     activeMarkets: activeWithRisk,
     resolvedMarkets,
   }
+}
+
+export async function getSiteConfigAction() {
+  let config = await db.siteConfig.findUnique({ where: { id: "GLOBAL" } })
+  if (!config) {
+    config = await db.siteConfig.create({
+      data: {
+        id: "GLOBAL",
+        adText: "Sponsored placements coming soon",
+        adUrl: null,
+        trendingMessage: "Trending prediction markets based on current events",
+      },
+    })
+  }
+  return config
+}
+
+const siteConfigSchema = z.object({
+  adText: z.string().trim().max(120).optional().or(z.literal("")),
+  adUrl: z.string().trim().url().optional().or(z.literal("")),
+  trendingMessage: z.string().trim().max(120).optional().or(z.literal("")),
+})
+
+export async function updateSiteConfigAction(input: z.infer<typeof siteConfigSchema>) {
+  await requireAdminSession()
+  const parsed = siteConfigSchema.safeParse(input)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid configuration." }
+  }
+  
+  const config = await db.siteConfig.upsert({
+    where: { id: "GLOBAL" },
+    update: {
+      adText: parsed.data.adText || null,
+      adUrl: parsed.data.adUrl || null,
+      trendingMessage: parsed.data.trendingMessage || null,
+    },
+    create: {
+      id: "GLOBAL",
+      adText: parsed.data.adText || null,
+      adUrl: parsed.data.adUrl || null,
+      trendingMessage: parsed.data.trendingMessage || null,
+    },
+  })
+
+  revalidatePath("/")
+  revalidatePath("/admin/settings")
+  return { success: true, config }
 }

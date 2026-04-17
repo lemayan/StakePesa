@@ -15,6 +15,7 @@ type SectorOption = {
 type OutcomeInput = {
   id: string
   name: string
+  imageUrl?: string
   seedStakeCents: number
 }
 
@@ -52,8 +53,8 @@ export function MarketCreationForm({ sectors }: Props) {
   const [trending, setTrending] = useState(false)
   const [isActive, setIsActive] = useState(true)
   const [outcomes, setOutcomes] = useState<OutcomeInput[]>([
-    { id: crypto.randomUUID(), name: "Yes", seedStakeCents: 0 },
-    { id: crypto.randomUUID(), name: "No", seedStakeCents: 0 },
+    { id: crypto.randomUUID(), name: "Yes", imageUrl: "", seedStakeCents: 0 },
+    { id: crypto.randomUUID(), name: "No", imageUrl: "", seedStakeCents: 0 },
   ])
 
   const totalSeed = useMemo(
@@ -66,7 +67,7 @@ export function MarketCreationForm({ sectors }: Props) {
   }
 
   function addOutcome() {
-    setOutcomes((prev) => [...prev, { id: crypto.randomUUID(), name: "", seedStakeCents: 0 }])
+    setOutcomes((prev) => [...prev, { id: crypto.randomUUID(), name: "", imageUrl: "", seedStakeCents: 0 }])
   }
 
   function removeOutcome(id: string) {
@@ -123,6 +124,7 @@ export function MarketCreationForm({ sectors }: Props) {
         isActive,
         outcomes: outcomes.map((o) => ({
           name: o.name.trim(),
+          imageUrl: o.imageUrl?.trim() || undefined,
           seedStakeCents: Math.max(0, Math.trunc(o.seedStakeCents)),
         })),
       })
@@ -238,28 +240,31 @@ export function MarketCreationForm({ sectors }: Props) {
                   </div>
                   
                   {outcomes.map((o, i) => (
-                    <div key={o.id} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center group">
-                      <input
-                        value={o.name}
-                        onChange={(e) => updateOutcome(o.id, { name: e.target.value })}
-                        placeholder={`Outcome ${i + 1} Name`}
-                        className="h-9 rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-green"
-                      />
-                      <input
-                        type="number"
-                        value={o.seedStakeCents}
-                        onChange={(e) => updateOutcome(o.id, { seedStakeCents: Number(e.target.value) })}
-                        placeholder="Seed (Cents)"
-                        className="h-9 w-24 rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-green"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeOutcome(o.id)}
-                        disabled={outcomes.length <= 2}
-                        className="p-1.5 text-fg-muted hover:text-red transition disabled:opacity-30 disabled:hover:text-fg-muted"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                    <div key={o.id} className="space-y-2 pb-3 border-b border-line last:border-b-0 last:pb-0">
+                      <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-center group">
+                        <input
+                          value={o.name}
+                          onChange={(e) => updateOutcome(o.id, { name: e.target.value })}
+                          placeholder={`Outcome ${i + 1} Name`}
+                          className="h-9 rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-green"
+                        />
+                        <input
+                          type="number"
+                          value={o.seedStakeCents}
+                          onChange={(e) => updateOutcome(o.id, { seedStakeCents: Number(e.target.value) })}
+                          placeholder="Seed (Cents)"
+                          className="h-9 w-24 rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-green"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeOutcome(o.id)}
+                          disabled={outcomes.length <= 2}
+                          className="p-1.5 text-fg-muted hover:text-red transition disabled:opacity-30 disabled:hover:text-fg-muted"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <ImagePreviewInput value={o.imageUrl || ""} onChange={(val) => updateOutcome(o.id, { imageUrl: val })} placeholder={`Avatar URL for ${o.name || `Outcome ${i + 1}`}`} />
                     </div>
                   ))}
                   

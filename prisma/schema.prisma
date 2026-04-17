@@ -599,10 +599,19 @@ model AdminMarket {
   @@index([closesAt])
 }
 
+model SiteConfig {
+  id              String   @id @default("GLOBAL")
+  adText          String?
+  adUrl           String?
+  trendingMessage String?
+  updatedAt       DateTime @updatedAt
+}
+
 model AdminMarketOutcome {
   id            String      @id @default(uuid())
   marketId      String
   name          String
+  imageUrl      String?
   seedStakeCents Int        @default(0)
   orderIndex    Int         @default(0)
   createdAt     DateTime    @default(now())
