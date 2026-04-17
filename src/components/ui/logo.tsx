@@ -113,8 +113,11 @@ export function Logo({ className = "", iconSize = 36, textSize = "text-[20px]" }
       className={`flex items-center gap-2.5 select-none cursor-pointer ${className}`}
       initial="hidden"
       animate={controls}
-      whileHover="hover"
-      whileTap="hover"
+      onHoverStart={() => controls.start("hover")}
+      onHoverEnd={() => controls.start("pulse")}
+      onTapStart={() => controls.start("hover")}
+      onTap={() => controls.start("pulse")}
+      onTapCancel={() => controls.start("pulse")}
     >
       <div className="relative flex items-center justify-center shrink-0">
         <svg 
