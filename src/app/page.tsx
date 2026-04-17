@@ -9,6 +9,7 @@ import { Footer } from "@/components/sections/footer"
 import CookieConsent from "@/components/ui/cookie-consent"
 import { db } from "@/lib/db"
 import { getSiteConfigAction } from "@/actions/admin"
+import { auth } from "@/auth"
 
 async function getLiveTrendingMarkets() {
   const markets = await db.adminMarket.findMany({
@@ -79,11 +80,16 @@ async function getGlobalSiteStats() {
 export const revalidate = 60 // Revalidate home page cache heavily
 
 export default async function Home() {
-  const [trendingMarkets, siteConfig, globalStats] = await Promise.all([
+  const sessionPromise = auth()
+  
+  const [trendingMarkets, siteConfig, globalStats, session] = await Promise.all([
     getLiveTrendingMarkets(),
     getSiteConfigAction(),
-    getGlobalSiteStats()
+    getGlobalSiteStats(),
+    sessionPromise
   ])
+
+  const isLoggedIn = !!session?.user
 
   return (
     <div className="min-h-screen bg-bg">
@@ -94,7 +100,7 @@ export default async function Home() {
       <StatsBar />
       <HowItWorks />
       <Suspense fallback={null}>
-        <LiveMarkets />
+        <LiveMarkets isLoggedIn={isLoggedIn} />
       </Suspense>
       <CallToAction />
       <Footer />
