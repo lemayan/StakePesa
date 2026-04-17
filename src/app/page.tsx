@@ -62,12 +62,27 @@ async function getLiveTrendingMarkets() {
   })
 }
 
+async function getGlobalSiteStats() {
+  const [tradersCount, pools] = await Promise.all([
+    db.user.count(),
+    db.marketPool.findMany({ select: { totalStakeCents: true } })
+  ])
+
+  const totalVolumeKES = pools.reduce((sum, p) => sum + p.totalStakeCents, 0) / 100
+
+  return {
+    tradersCount: Math.max(12, tradersCount), // fallback so it doesn't look empty for new deployments
+    totalVolumeMil: Math.max(0.1, totalVolumeKES / 1000000) // format in Millions. E.g 8.2 = 8.2M
+  }
+}
+
 export const revalidate = 60 // Revalidate home page cache heavily
 
 export default async function Home() {
-  const [trendingMarkets, siteConfig] = await Promise.all([
+  const [trendingMarkets, siteConfig, globalStats] = await Promise.all([
     getLiveTrendingMarkets(),
-    getSiteConfigAction()
+    getSiteConfigAction(),
+    getGlobalSiteStats()
   ])
 
   return (
@@ -75,7 +90,7 @@ export default async function Home() {
       <Suspense fallback={null}>
         <Navbar />
       </Suspense>
-      <Hero initialTrendingMarkets={trendingMarkets} siteConfig={siteConfig} />
+      <Hero initialTrendingMarkets={trendingMarkets} siteConfig={siteConfig} globalStats={globalStats} />
       <StatsBar />
       <HowItWorks />
       <Suspense fallback={null}>

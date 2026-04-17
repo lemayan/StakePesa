@@ -187,9 +187,10 @@ function MultiLineChart({ outcomes, activeHover, setActiveHover }: { outcomes: (
 interface HeroProps {
   initialTrendingMarkets: TrendingMarket[];
   siteConfig: SiteConfig | null;
+  globalStats: { tradersCount: number, totalVolumeMil: number };
 }
 
-export function Hero({ initialTrendingMarkets, siteConfig }: HeroProps) {
+export function Hero({ initialTrendingMarkets, siteConfig, globalStats }: HeroProps) {
   const [marketIdx, setMarketIdx] = useState(0);
   const [activeHover, setActiveHover] = useState<number | null>(null);
 
@@ -297,12 +298,12 @@ export function Hero({ initialTrendingMarkets, siteConfig }: HeroProps) {
             className="relative flex justify-center sm:justify-start items-center gap-8 sm:gap-6 mt-8 sm:mt-12 font-mono text-fg-muted text-center sm:text-left"
           >
             <div>
-              <AnimatedCounter target={12000} prefix="" suffix="+" className="text-fg font-bold text-[22px] sm:text-[28px] block tabular-nums" />
+              <AnimatedCounter target={globalStats.tradersCount} prefix="" suffix="+" className="text-fg font-bold text-[22px] sm:text-[28px] block tabular-nums" />
               <span className="text-[11px] sm:text-[13px] mt-1 block uppercase tracking-wider">traders</span>
             </div>
             <div className="hidden sm:block w-px h-8 bg-line" />
             <div>
-              <AnimatedCounter target={8.2} prefix="KES " suffix="M" decimals={1} className="text-fg font-bold text-[22px] sm:text-[28px] block tabular-nums" />
+              <AnimatedCounter target={globalStats.totalVolumeMil} prefix="KES " suffix="M" decimals={1} className="text-fg font-bold text-[22px] sm:text-[28px] block tabular-nums" />
               <span className="text-[11px] sm:text-[13px] mt-1 block uppercase tracking-wider">volume</span>
             </div>
           </motion.div>

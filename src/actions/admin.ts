@@ -212,6 +212,7 @@ export async function createAdminMarketAction(input: z.infer<typeof createMarket
     return created
   })
 
+  revalidatePath("/")
   revalidatePath("/admin")
   revalidatePath("/admin/markets")
   revalidatePath("/dashboard/markets")
@@ -228,6 +229,7 @@ export async function toggleTrendingAction(marketId: string, trending: boolean) 
     data: { trending },
   })
 
+  revalidatePath("/")
   revalidatePath("/admin/markets")
   revalidatePath("/dashboard/markets")
   revalidateTag("markets", "max")
@@ -255,6 +257,7 @@ export async function toggleMarketActiveAction(marketId: string, isActive: boole
     },
   })
 
+  revalidatePath("/")
   revalidatePath("/admin/markets")
   revalidatePath("/dashboard/markets")
   revalidateTag("markets", "max")
@@ -310,6 +313,7 @@ export async function resolveAdminMarketAction(input: z.infer<typeof resolveSche
     },
   })
 
+  revalidatePath("/")
   revalidatePath("/admin/markets")
   revalidatePath("/admin/resolved")
   revalidatePath("/dashboard/markets")
