@@ -42,16 +42,16 @@ export function SideSheet({ isOpen, onClose, title, description, children }: Sid
 
           {/* Sheet */}
           <motion.div
-            initial={{ x: "100%", filter: "blur(8px)" }}
-            animate={{ x: 0, filter: "blur(0px)" }}
-            exit={{ x: "100%", filter: "blur(8px)" }}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 220 }}
-            className="fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-line bg-bg/95 shadow-2xl backdrop-blur-xl md:w-[600px]"
+            className="fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-line bg-bg shadow-xl md:w-[480px]"
           >
-            <div className="flex items-center justify-between border-b border-line px-6 py-5">
+            <div className="flex items-center justify-between border-b border-line px-6 py-4">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">{title}</h2>
-                {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
+                <h2 className="text-[16px] font-semibold">{title}</h2>
+                {description && <p className="mt-0.5 text-[13px] text-fg-muted">{description}</p>}
               </div>
               <button
                 onClick={onClose}

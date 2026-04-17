@@ -39,20 +39,20 @@ export function AdminNav({ items }: Props) {
             key={item.href}
             href={item.href}
             className={[
-              "group flex items-center justify-between rounded-xl px-4 py-3 text-sm font-medium transition duration-300",
+              "group flex items-center justify-between rounded-md px-3 py-2 text-[13px] font-medium transition",
               isActive
-                ? "bg-white/10 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),_0_0_20px_rgba(34,197,94,0.15)] ring-1 ring-white/20"
-                : "text-white/50 hover:bg-white/5 hover:text-white",
+                ? "bg-green/10 text-green font-bold"
+                : "text-fg-muted hover:bg-bg-above/50 hover:text-fg",
             ].join(" ")}
           >
-            <span className="flex items-center gap-2.5 font-medium">
+            <span className="flex items-center gap-2.5">
               <Icon className="h-4 w-4" />
               {item.label}
             </span>
             <span
               className={[
-                "h-1.5 w-1.5 rounded-full transition duration-300",
-                isActive ? "bg-green drop-shadow-[0_0_5px_rgba(34,197,94,0.8)]" : "bg-white/10 group-hover:bg-white/40",
+                "h-1.5 w-1.5 rounded-full transition",
+                isActive ? "bg-green" : "bg-transparent group-hover:bg-line-bright",
               ].join(" ")}
             />
           </Link>

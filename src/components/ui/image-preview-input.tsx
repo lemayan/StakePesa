@@ -13,8 +13,8 @@ export function ImagePreviewInput({ value, onChange, placeholder = "https://exam
   const [isValid, setIsValid] = useState<boolean | null>(value ? true : null)
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-line bg-bg transition focus-within:border-green/50">
-      <div className="relative z-10 flex items-center gap-2 border-b border-line/50 bg-bg p-2">
+    <div className="group relative overflow-hidden rounded-md border border-line bg-bg transition focus-within:border-green">
+      <div className="relative z-10 flex items-center gap-2 border-b border-line bg-bg px-2 py-1">
         <LinkIcon className="h-4 w-4 text-fg-muted ml-2" />
         <input
           type="url"
@@ -30,7 +30,7 @@ export function ImagePreviewInput({ value, onChange, placeholder = "https://exam
         {isValid && value && <CheckCircle2 className="mr-2 h-4 w-4 text-green" />}
       </div>
 
-      <div className="relative flex aspect-video w-full items-center justify-center bg-bg-above/20">
+      <div className="relative flex aspect-video w-full items-center justify-center bg-bg-above/30">
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img

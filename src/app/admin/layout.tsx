@@ -18,30 +18,27 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-bg bg-grid bg-admin-mesh">
-      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[260px_1fr]">
-        <aside className="relative flex flex-col overflow-hidden rounded-[2rem] border border-white/[0.08] bg-black/40 p-5 shadow-2xl backdrop-blur-2xl md:sticky md:top-6 md:h-[calc(100vh-3rem)]">
-          {/* Subtle gradient blob for the sidebar */}
-          <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-green/20 blur-[60px]" />
-          
-          <div className="relative mb-6 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-inner backdrop-blur-md">
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-green">Command Center</p>
-            <p className="mt-1 truncate text-xs font-medium text-white/70">{session.user.email}</p>
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:grid-cols-[260px_1fr]">
+        <aside className="border border-line rounded-lg p-4 bg-bg-above/20 md:sticky md:top-6 md:h-[calc(100vh-3rem)]">
+          <div className="mb-6 border-b border-line pb-4">
+            <p className="text-[13px] font-mono uppercase tracking-wider text-fg-muted">Command Center</p>
+            <p className="mt-1 truncate text-[14px] font-medium text-fg">{session.user.email}</p>
           </div>
 
           <div className="relative flex-1">
             <AdminNav items={nav} />
           </div>
 
-          <div className="relative mt-8 rounded-2xl border border-white/5 bg-white/[0.02] p-4 text-xs">
-            <div className="flex items-center gap-2 mb-3">
+          <div className="mt-8 rounded-md border border-line bg-bg p-3 text-xs">
+            <div className="flex items-center gap-2 mb-2">
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-75"></span>
+                <span className="absolute inline-flex h-full w-full animate-livepulse rounded-full bg-green opacity-75"></span>
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green"></span>
               </span>
-              <span className="font-mono text-white/60">Risk Node Active</span>
+              <span className="font-mono text-fg-muted">Risk Node Active</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-              <div className="h-1.5 w-[73%] rounded-full bg-gradient-to-r from-emerald-500 to-green shadow-[0_0_10px_rgba(34,197,94,0.5)]" />
+            <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+              <div className="h-1 w-[73%] rounded-full bg-green" />
             </div>
           </div>
         </aside>

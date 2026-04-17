@@ -85,80 +85,72 @@ export function ActiveMarketsPanel({ markets }: Props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {message && (
-        <div className={`rounded-xl border p-4 backdrop-blur-md ${message.type === "error" ? "border-red/20 bg-red/10 text-red shadow-[0_0_15px_rgba(239,68,68,0.1)]" : "border-green/20 bg-green/10 text-green shadow-[0_0_15px_rgba(34,197,94,0.1)]"}`}>
-          <div className="flex items-center gap-2 font-semibold">
-            {message.type === "success" ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+        <div className={`rounded-xl border p-4 ${message.type === "error" ? "border-red/20 bg-red/10 text-red" : "border-green/20 bg-green/10 text-green"}`}>
+          <div className="flex items-center gap-2 text-[13px] font-semibold">
+            {message.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
             {message.text}
           </div>
         </div>
       )}
 
       {/* Data Grid */}
-      <div className="overflow-x-auto rounded-[2rem] border border-white/5 bg-black/40 shadow-xl backdrop-blur-xl">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="border-b border-white/10 bg-white/5 text-xs uppercase tracking-widest text-white/50">
+      <div className="overflow-x-auto rounded-lg border border-line bg-bg-above/20">
+        <table className="w-full text-left text-[14px]">
+          <thead className="border-b border-line bg-bg text-[12px] uppercase tracking-wider text-fg-muted">
             <tr>
-              <th className="px-6 py-4 font-bold">Market / Sector</th>
-              <th className="px-6 py-4 font-bold">Pool / Imbalance</th>
-              <th className="px-6 py-4 font-bold">Status</th>
-              <th className="px-6 py-4 font-bold text-right">Operations</th>
+              <th className="px-4 py-3 font-semibold">Market / Sector</th>
+              <th className="px-4 py-3 font-semibold">Pool / Imbalance</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold text-right">Operations</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-line">
             {optimisticMarkets.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-white/30 font-mono">
-                  No active markets in the node.
+                <td colSpan={4} className="px-4 py-8 text-center text-sm text-fg-muted">
+                  No active markets.
                 </td>
               </tr>
             )}
             {optimisticMarkets.map((market) => (
-              <tr key={market.id} className="group transition hover:bg-white/[0.02]">
-                {/* Column 1: Market Map */}
-                <td className="px-6 py-5">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 text-white/20 group-hover:text-white/40 transition"><GripVertical className="h-4 w-4" /></div>
+              <tr key={market.id} className="hover:bg-bg-above/40 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-start gap-2">
+                    <div className="mt-1 text-fg-muted"><GripVertical className="h-3 w-3" /></div>
                     <div>
-                      <p className="font-bold text-white/90 max-w-[300px] truncate" title={market.title}>{market.title}</p>
-                      <p className="text-xs text-white/40 mt-0.5">{market.sector.title} · TTL: {new Date(market.closesAt).toLocaleDateString()}</p>
+                      <p className="font-semibold text-[14px] text-fg max-w-[280px] truncate" title={market.title}>{market.title}</p>
+                      <p className="text-[12px] text-fg-muted mt-0.5">{market.sector.title} · Closes {new Date(market.closesAt).toLocaleDateString()}</p>
                     </div>
                   </div>
                 </td>
 
-                {/* Column 2: Risk Imbalance */}
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white/50 shadow-inner">
-                      <Coins className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <p className="font-mono text-[13px] font-medium text-white/80">
-                        {((market.totalStakeCents || 0) / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })} KES
-                      </p>
-                      <div className="mt-1 flex items-center gap-1.5">
-                        <span className={`h-2 w-2 rounded-full ${market.imbalance >= 0.8 ? "animate-pulse bg-red shadow-[0_0_8px_rgba(239,68,68,0.8)]" : market.imbalance >= 0.6 ? "bg-amber shadow-[0_0_8px_rgba(251,191,36,0.6)]" : "bg-green text-transparent"}`} />
-                        <span className={`text-[10px] font-bold uppercase tracking-wider ${market.imbalance >= 0.8 ? "text-red" : market.imbalance >= 0.6 ? "text-amber" : "text-white/40"}`}>
-                          {market.riskSummary}
-                        </span>
-                      </div>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col">
+                    <p className="font-mono text-[13px] font-medium text-fg">
+                      {((market.totalStakeCents || 0) / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })} KES
+                    </p>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className={`h-1.5 w-1.5 rounded-full ${market.imbalance >= 0.8 ? "animate-livepulse bg-red" : market.imbalance >= 0.6 ? "bg-amber" : "bg-green"}`} />
+                      <span className={`text-[11px] font-semibold uppercase tracking-wider ${market.imbalance >= 0.8 ? "text-red" : market.imbalance >= 0.6 ? "text-amber" : "text-green"}`}>
+                        {market.riskSummary}
+                      </span>
                     </div>
                   </div>
                 </td>
 
-                {/* Column 3: Status Toggles */}
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-2">
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1.5">
                     <button
                       onClick={() => setTrending(market.id, !market.trending)}
-                      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition ${market.trending ? "border-amber/20 bg-amber/10 text-amber shadow-[0_0_10px_rgba(251,191,36,0.15)]" : "border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white"}`}
+                      className={`inline-flex items-center gap-1 w-fit rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider transition ${market.trending ? "border-amber/20 bg-amber/10 text-amber" : "border-line bg-bg text-fg-muted hover:bg-bg-above"}`}
                     >
                       <Flame className="h-3 w-3" /> {market.trending ? "Hot" : "Cold"}
                     </button>
                     <button
                       onClick={() => setActive(market.id, !market.isActive)}
-                      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition ${market.isActive ? "border-green/20 bg-green/10 text-green shadow-[0_0_10px_rgba(34,197,94,0.15)]" : "border-white/10 bg-white/5 text-white/40 hover:bg-white/10 hover:text-white"}`}
+                      className={`inline-flex items-center gap-1 w-fit rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider transition ${market.isActive ? "border-green/20 bg-green/10 text-green" : "border-line bg-bg text-fg-muted hover:bg-bg-above"}`}
                     >
                       {market.isActive ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
                       {market.isActive ? "Live" : "Paused"}
@@ -166,17 +158,16 @@ export function ActiveMarketsPanel({ markets }: Props) {
                   </div>
                 </td>
 
-                {/* Column 4: Ops */}
-                <td className="px-6 py-5 text-right">
+                <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => {
                       setResolveTarget(market)
                       setWinningOutcome(market.outcomes[0]?.name ?? "")
                     }}
-                    className="group/btn relative inline-flex items-center justify-center gap-2 overflow-hidden rounded-xl bg-white/10 px-4 py-2 text-xs font-bold text-white shadow-inner transition hover:scale-105 hover:bg-white hover:text-black hover:shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-bg-above border border-line px-3 py-1.5 text-[12px] font-semibold text-fg transition hover:bg-red/10 hover:border-red/20 hover:text-red focus:outline-none"
                   >
-                    <ShieldAlert className="h-4 w-4 text-red transition group-hover/btn:text-red" />
-                    Force Settlement
+                    <ShieldAlert className="h-3.5 w-3.5" />
+                    Settle
                   </button>
                 </td>
               </tr>
@@ -185,54 +176,43 @@ export function ActiveMarketsPanel({ markets }: Props) {
         </table>
       </div>
 
-      {/* Premium Resolve Modal */}
+      {/* Resolve Modal Minimalist */}
       {resolveTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setResolveTarget(null)} />
-          <div className="relative w-full max-w-lg overflow-hidden rounded-[2rem] border border-red/20 bg-[#111] p-8 shadow-[0_0_50px_rgba(239,68,68,0.15)] backdrop-blur-xl animate-in zoom-in-95 duration-200">
-            <div className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-red/20 blur-[60px]" />
-            
-            <div className="relative text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-red/20 bg-red/10 text-red shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-                <ShieldAlert className="h-8 w-8" />
-              </div>
-              <h4 className="text-2xl font-black text-white">Resolve Market Node</h4>
-              <p className="mt-2 text-sm font-medium text-red/80">CAUTION: This executes instantaneous, irreversible financial settlement parsing across all ledgers.</p>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setResolveTarget(null)} />
+          <div className="relative w-full max-w-sm rounded-[1rem] border border-line bg-bg p-6 shadow-xl animate-in fade-in zoom-in-95 duration-200">
+            <h4 className="text-[16px] font-bold flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-red" /> Resolve Market</h4>
+            <p className="mt-1 text-[13px] text-fg-muted">Select the winning outcome. This will irreversibly settle the market and execute payouts.</p>
+
+            <div className="mb-4 mt-4 rounded-lg bg-bg-above/50 p-3">
+              <p className="text-[12px] font-semibold text-fg max-w-full truncate">{resolveTarget.title}</p>
             </div>
 
-            <div className="relative mt-8 space-y-6">
-              <div className="rounded-2xl border border-white/5 bg-black/50 p-4">
-                <p className="text-xs font-bold uppercase tracking-widest text-white/40 text-center mb-1">Target Market</p>
-                <p className="font-mono text-sm text-center text-white/90">{resolveTarget.title}</p>
-              </div>
-
-              <label className="grid gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/50">Declare Winning Outcome</span>
-                <div className="relative">
-                  <select value={winningOutcome} onChange={(e) => setWinningOutcome(e.target.value)} className="h-12 w-full appearance-none rounded-xl border border-white/10 bg-white/5 px-4 pr-10 text-white outline-none transition focus:border-red focus:bg-red/5 focus:ring-1 focus:ring-red">
-                    {resolveTarget.outcomes.map((o) => (
-                      <option key={o.name} value={o.name} className="bg-[#111] text-white">{o.name}</option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-white/40">▼</div>
-                </div>
+            <div className="space-y-4">
+              <label className="grid gap-1.5">
+                <span className="text-[12px] font-semibold text-fg-muted uppercase tracking-wider">Outcome</span>
+                <select value={winningOutcome} onChange={(e) => setWinningOutcome(e.target.value)} className="h-9 w-full rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-green focus:ring-1 focus:ring-green">
+                  {resolveTarget.outcomes.map((o) => (
+                    <option key={o.name} value={o.name}>{o.name}</option>
+                  ))}
+                </select>
               </label>
 
-              <label className="grid gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-white/50">Type <strong className="text-red">RESOLVE</strong> to execute</span>
-                <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="Type RESOLVE" className="h-12 w-full rounded-xl border border-white/10 bg-white/5 px-4 text-white outline-none transition focus:border-red focus:bg-red/5 focus:ring-1 focus:ring-red" />
+              <label className="grid gap-1.5">
+                <span className="text-[12px] font-semibold text-fg-muted uppercase tracking-wider">Type RESOLVE</span>
+                <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="RESOLVE" className="h-9 w-full rounded-md border border-line bg-bg px-3 text-[13px] text-fg outline-none focus:border-red focus:ring-1 focus:ring-red" />
               </label>
             </div>
 
-            <div className="relative mt-8 flex items-center gap-3">
-              <button type="button" onClick={() => setResolveTarget(null)} className="flex-1 rounded-xl border border-white/10 py-3 font-bold text-white/60 transition hover:bg-white/5 hover:text-white">Cancel Abort</button>
+            <div className="mt-6 flex items-center gap-2">
+              <button type="button" onClick={() => setResolveTarget(null)} className="flex-1 rounded-md border border-line py-2 text-[13px] font-semibold text-fg-muted hover:text-fg hover:bg-bg-above transition">Cancel</button>
               <button
                 type="button"
                 onClick={submitResolve}
                 disabled={confirmText !== "RESOLVE" || isPending}
-                className="flex-[2] rounded-xl bg-red py-3 font-bold text-white shadow-[0_0_20px_rgba(239,68,68,0.4)] transition hover:bg-red/90 hover:shadow-[0_0_30px_rgba(239,68,68,0.6)] disabled:opacity-30 disabled:shadow-none"
+                className="flex-1 rounded-md bg-red py-2 text-[13px] font-semibold text-white transition hover:bg-red/90 disabled:opacity-50 disabled:hover:bg-red"
               >
-                {isPending ? "Executing Settlement Ledger..." : "EXECUTE SETTLEMENT"}
+                {isPending ? "Executing..." : "Settle Market"}
               </button>
             </div>
           </div>

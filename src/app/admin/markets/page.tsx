@@ -8,31 +8,23 @@ export default async function AdminMarketsPage() {
   const highRiskCount = data.activeMarkets.filter((market) => market.imbalance >= 0.8).length
 
   return (
-    <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <header className="relative overflow-hidden rounded-[2rem] border border-white/5 bg-black/40 p-8 shadow-2xl backdrop-blur-xl">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-green/10 blur-[80px]" />
-        
-        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-green">
-              <Radar className="h-4 w-4 animate-spin-slow" /> ACTIVE MARKET CONTROL
-            </p>
-            <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-white/90">Market Lifecycle & Risk</h1>
-            <div className="mt-4 flex flex-wrap gap-3 text-xs font-medium">
-              <span className="rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-white/70 shadow-inner">
-                Open Markets: {data.activeMarkets.length}
-              </span>
-              <span className="rounded-full border border-red/20 bg-red/10 px-4 py-1.5 text-red shadow-[0_0_15px_rgba(239,68,68,0.1)]">
-                High Risk: {highRiskCount}
-              </span>
-            </div>
-          </div>
-          
-          <div className="shrink-0">
-            <MarketCreationForm sectors={data.sectors} />
-          </div>
+    <section className="space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Active Markets</h1>
+          <p className="text-[13px] text-fg-secondary">
+            Manage the lifecycle of live prediction markets and monitor pool imbalances.
+          </p>
         </div>
-      </header>
+        <div className="shrink-0">
+          <MarketCreationForm sectors={data.sectors} />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 text-[12px] font-mono mb-4 text-fg-muted">
+        <span className="px-2 py-1 rounded bg-bg-above/50 border border-line">Open: {data.activeMarkets.length}</span>
+        {highRiskCount > 0 && <span className="px-2 py-1 rounded bg-red/10 text-red border border-red/20 border-dashed">High Risk: {highRiskCount}</span>}
+      </div>
 
       <div className="w-full">
         <ActiveMarketsPanel markets={data.activeMarkets} />
