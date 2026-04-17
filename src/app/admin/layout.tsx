@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { auth } from "@/auth"
 import { AdminNav } from "@/components/admin/admin-nav"
 import type { NavItem } from "@/components/admin/admin-nav"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 const nav: NavItem[] = [
   { href: "/admin", label: "Dashboard", iconKey: "dashboard" },
@@ -17,12 +18,15 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   }
 
   return (
-    <div className="min-h-screen bg-bg bg-grid bg-admin-mesh">
+    <div className="min-h-screen bg-bg">
       <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-8 md:grid-cols-[260px_1fr]">
-        <aside className="border border-line rounded-lg p-4 bg-bg-above/20 md:sticky md:top-6 md:h-[calc(100vh-3rem)]">
-          <div className="mb-6 border-b border-line pb-4">
-            <p className="text-[13px] font-mono uppercase tracking-wider text-fg-muted">Command Center</p>
-            <p className="mt-1 truncate text-[14px] font-medium text-fg">{session.user.email}</p>
+        <aside className="border border-line rounded-lg p-4 bg-bg-above/20 md:sticky md:top-6 md:h-[calc(100vh-3rem)] flex flex-col">
+          <div className="mb-6 border-b border-line pb-4 flex items-start justify-between">
+            <div>
+              <p className="text-[13px] font-mono uppercase tracking-wider text-fg-muted">Command Center</p>
+              <p className="mt-1 truncate text-[14px] font-medium text-fg">{session.user.email}</p>
+            </div>
+            <ThemeToggle />
           </div>
 
           <div className="relative flex-1">
