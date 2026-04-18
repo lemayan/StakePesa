@@ -1,8 +1,8 @@
 "use client"
 
 import { useOptimistic, useState, useTransition } from "react"
-import { resolveAdminMarketAction, toggleMarketActiveAction, toggleTrendingAction } from "@/actions/admin"
-import { Play, Pause, Flame, GripVertical, AlertTriangle, Coins, CheckCircle2, ShieldAlert } from "lucide-react"
+import { resolveAdminMarketAction, toggleMarketActiveAction } from "@/actions/admin"
+import { Play, Pause, GripVertical, AlertTriangle, Coins, CheckCircle2, ShieldAlert } from "lucide-react"
 
 type ActiveMarket = {
   id: string
@@ -32,26 +32,13 @@ export function ActiveMarketsPanel({ markets }: Props) {
 
   const [optimisticMarkets, setOptimisticMarkets] = useOptimistic(
     markets,
-    (state, patch: { marketId: string; type: "trending" | "active"; value: boolean }) =>
+    (state, patch: { marketId: string; type: "active"; value: boolean }) =>
       state.map((market) =>
         market.id === patch.marketId
-          ? patch.type === "trending"
-            ? { ...market, trending: patch.value }
-            : { ...market, isActive: patch.value, status: patch.value ? "OPEN" : "CLOSED" }
+          ? { ...market, isActive: patch.value, status: patch.value ? "OPEN" : "CLOSED" }
           : market
       )
   )
-
-  function setTrending(marketId: string, value: boolean) {
-    setOptimisticMarkets({ marketId, type: "trending", value })
-    startTransition(async () => {
-      const result = await toggleTrendingAction(marketId, value)
-      const error = (result as { error?: string }).error
-      if (typeof error === "string") {
-        setMessage({ type: "error", text: error })
-      }
-    })
-  }
 
   function setActive(marketId: string, value: boolean) {
     setOptimisticMarkets({ marketId, type: "active", value })
@@ -142,12 +129,6 @@ export function ActiveMarketsPanel({ markets }: Props) {
 
                 <td className="px-4 py-3">
                   <div className="flex flex-col gap-1.5">
-                    <button
-                      onClick={() => setTrending(market.id, !market.trending)}
-                      className={`inline-flex items-center gap-1 w-fit rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider transition ${market.trending ? "border-amber/20 bg-amber/10 text-amber" : "border-line bg-bg text-fg-muted hover:bg-bg-above"}`}
-                    >
-                      <Flame className="h-3 w-3" /> {market.trending ? "Hot" : "Cold"}
-                    </button>
                     <button
                       onClick={() => setActive(market.id, !market.isActive)}
                       className={`inline-flex items-center gap-1 w-fit rounded border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider transition ${market.isActive ? "border-green/20 bg-green/10 text-green" : "border-line bg-bg text-fg-muted hover:bg-bg-above"}`}

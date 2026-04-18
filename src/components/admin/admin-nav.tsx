@@ -2,15 +2,16 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Gauge, SlidersHorizontal, Trophy, Waypoints } from "lucide-react"
+import { GalleryHorizontalEnd, Gauge, SlidersHorizontal, Trophy, Waypoints } from "lucide-react"
 
-type IconKey = "dashboard" | "markets" | "resolved" | "settings"
+type IconKey = "dashboard" | "markets" | "resolved" | "settings" | "sliders"
 
 const ICONS_BY_KEY = {
   dashboard: Gauge,
   markets: Waypoints,
   resolved: Trophy,
   settings: SlidersHorizontal,
+  sliders: GalleryHorizontalEnd,
 } as const
 
 export type NavItem = {

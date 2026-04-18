@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 const nav: NavItem[] = [
   { href: "/admin", label: "Dashboard", iconKey: "dashboard" },
+  { href: "/admin/trending", label: "Sliders", iconKey: "sliders" },
   { href: "/admin/markets", label: "Active Markets", iconKey: "markets" },
   { href: "/admin/resolved", label: "Resolved Markets", iconKey: "resolved" },
   { href: "/admin/settings", label: "Settings", iconKey: "settings" },

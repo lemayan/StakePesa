@@ -2,9 +2,30 @@
  * image-queue.ts  (v2)
  *
  * Non-blocking fire-and-forget wrapper for entity image fetching.
+ * Uses a sequential queue to avoid exhausting the Prisma connection pool.
  */
 
 import { getEntityImage } from "@/lib/candidate-image";
+
+type Task = () => Promise<void>;
+const queue: Task[] = [];
+let isProcessing = false;
+
+async function processQueue() {
+  if (isProcessing) return;
+  isProcessing = true;
+  while (queue.length > 0) {
+    const task = queue.shift();
+    if (task) {
+      try {
+        await task();
+      } catch (err) {
+        console.error("[image-queue] Error processing task:", err);
+      }
+    }
+  }
+  isProcessing = false;
+}
 
 /**
  * Queue an image fetch for a single market option.
@@ -15,12 +36,17 @@ export function queueImageFetch(
   optionName: string,
   marketCategory: string
 ): void {
-  getEntityImage(marketId, optionName, marketCategory).catch((err) => {
-    console.error(
-      `[image-queue] Failed for "${optionName}" (${marketId}):`,
-      err
-    );
+  queue.push(async () => {
+    try {
+      await getEntityImage(marketId, optionName, marketCategory);
+    } catch (err) {
+      console.error(
+        `[image-queue] Failed for "${optionName}" (${marketId}):`,
+        err
+      );
+    }
   });
+  processQueue();
 }
 
 /**
