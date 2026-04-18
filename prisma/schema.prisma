@@ -622,3 +622,42 @@ model AdminMarketOutcome {
   @@unique([marketId, name])
   @@index([marketId])
 }
+
+// ──────────────────────────────────────────────
+// RELIABILITY & IDEMPOTENCY
+// ──────────────────────────────────────────────
+
+model IdempotencyRequest {
+  id             String    @id @default(uuid()) @db.Uuid
+  scope          String
+  key            String
+  requestHash    String
+  status         String
+  responseStatus Int?
+  responseJson   Json?
+  error          String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([scope, key])
+}
+
+model SettlementOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  eventKey      String    @unique
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        String
+  attempts      Int       @default(0)
+  lastError     String?
+  lockedBy      String?
+  lockedAt      DateTime?
+  availableAt   DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, availableAt])
+}
