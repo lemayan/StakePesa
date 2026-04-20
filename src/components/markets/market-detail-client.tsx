@@ -1,10 +1,16 @@
 "use client";
 
-import { useState, useTransition, useCallback, useEffect, useRef } from "react";
+import { useState, useTransition, useCallback, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { placeBetAction, estimatePayoutAction, postCommentAction, getCommentsAction } from "@/actions/market";
+import {
+  placeBetAction,
+  estimatePayoutAction,
+  postCommentAction,
+  getCommentsAction,
+  getMarketOddsAction,
+} from "@/actions/market";
 import type { MarketCommentData } from "@/actions/market";
 
 type OutcomeOdds = {
@@ -158,6 +164,116 @@ function OutcomeBar({ pct, colorHex }: { pct: number; colorHex: string }) {
         className="h-full rounded-full"
         style={{ background: `linear-gradient(90deg, ${colorHex}80, ${colorHex})` }}
       />
+    </div>
+  );
+}
+
+function LivePriceChart({
+  title,
+  points,
+  colorHex,
+  nextRefreshIn,
+  currentOdds,
+  deltaPct,
+}: {
+  title: string;
+  points: Array<{ t: number; value: number }>;
+  colorHex: string;
+  nextRefreshIn: number;
+  currentOdds: number;
+  deltaPct: number;
+}) {
+  const width = 760;
+  const height = 240;
+  const padX = 14;
+  const padY = 16;
+
+  const values = points.map((p) => p.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const spread = Math.max(0.001, max - min);
+
+  const normalizeY = (value: number) => {
+    const scaled = (value - min) / spread;
+    return height - padY - scaled * (height - padY * 2);
+  };
+
+  const normalizeX = (idx: number) => {
+    if (points.length <= 1) return padX;
+    return padX + (idx / (points.length - 1)) * (width - padX * 2);
+  };
+
+  const path = points
+    .map((point, idx) => `${idx === 0 ? "M" : "L"}${normalizeX(idx).toFixed(2)} ${normalizeY(point.value).toFixed(2)}`)
+    .join(" ");
+
+  const areaPath =
+    `${path} L ${normalizeX(points.length - 1).toFixed(2)} ${(height - padY).toFixed(2)} L ${normalizeX(0).toFixed(2)} ${(height - padY).toFixed(2)} Z`;
+
+  const lastPoint = points[points.length - 1];
+  const lastX = normalizeX(points.length - 1);
+  const lastY = normalizeY(lastPoint.value);
+
+  return (
+    <div className="rounded-2xl border border-line bg-bg-above/20 p-4 md:p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Live Market Tape</p>
+          <p className="text-[15px] font-semibold mt-1">{title}</p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[10px] font-mono text-fg-muted">Next refresh in {nextRefreshIn}s</p>
+          <p className="text-[18px] font-mono font-bold tabular-nums leading-none mt-1" style={{ color: colorHex }}>
+            {currentOdds.toFixed(2)}x
+          </p>
+          <p className={`text-[10px] font-mono mt-0.5 ${deltaPct >= 0 ? "text-green" : "text-red"}`}>
+            {deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(2)}%
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-line bg-bg/60 p-2 md:p-3">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-55 md:h-60" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="live-chart-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={colorHex} stopOpacity="0.28" />
+              <stop offset="100%" stopColor={colorHex} stopOpacity="0.03" />
+            </linearGradient>
+          </defs>
+
+          <line x1={padX} y1={padY} x2={padX} y2={height - padY} stroke="#ffffff20" strokeWidth="1" />
+          <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} stroke="#ffffff20" strokeWidth="1" />
+
+          <motion.path
+            d={areaPath}
+            fill="url(#live-chart-fill)"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.35 }}
+          />
+
+          <motion.path
+            d={path}
+            fill="none"
+            stroke={colorHex}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            initial={{ pathLength: 0 }}
+            animate={{ pathLength: 1 }}
+            transition={{ duration: 0.4 }}
+          />
+
+          <motion.circle
+            cx={lastX}
+            cy={lastY}
+            r="4.5"
+            fill={colorHex}
+            initial={{ scale: 0.4, opacity: 0.5 }}
+            animate={{ scale: [1, 1.35, 1], opacity: [0.7, 1, 0.7] }}
+            transition={{ duration: 1.1, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </svg>
+      </div>
     </div>
   );
 }
@@ -346,11 +462,72 @@ export function MarketDetailClient({
   const [placedBet, setPlacedBet] = useState<{ outcome: string; stakeCents: number; odds: number } | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [liveOutcomes, setLiveOutcomes] = useState(outcomes);
+  const [liveTotalPoolCents, setLiveTotalPoolCents] = useState(totalPoolCents);
+  const [livePrizePoolCents, setLivePrizePoolCents] = useState(prizePoolCents);
+  const [liveHouseMarginBps, setLiveHouseMarginBps] = useState(houseMarginBps);
+  const [isLiveOddsOn, setIsLiveOddsOn] = useState(hasLiveOdds);
+  const [nextRefreshIn, setNextRefreshIn] = useState(4);
+  const [chartPoints, setChartPoints] = useState<Array<{ t: number; value: number }>>(() => {
+    const base = outcomes[0]?.decimalOdds ?? 1;
+    return Array.from({ length: 24 }, (_, idx) => ({ t: Date.now() - (24 - idx) * 3000, value: base }));
+  });
 
   const stakeCents = Math.round((parseFloat(stakeKES) || 0) * 100);
   const isValidStake = stakeCents >= 1000;
   const isCooldownActive = (cooldownSeconds ?? 0) > 0;
   const canBet = isLoggedIn && selectedOutcome && isValidStake && !isCooldownActive;
+  const primaryOutcome = selectedOutcome ?? liveOutcomes[0]?.outcome ?? null;
+  const primaryOutcomeData = liveOutcomes.find((o) => o.outcome === primaryOutcome) ?? liveOutcomes[0];
+  const primaryColor = OUTCOME_COLORS[liveOutcomes.findIndex((o) => o.outcome === primaryOutcome)] ?? OUTCOME_COLORS[0];
+
+  const chartDeltaPct = chartPoints.length > 1
+    ? ((chartPoints[chartPoints.length - 1]!.value - chartPoints[0]!.value) / chartPoints[0]!.value) * 100
+    : 0;
+
+  useEffect(() => {
+    const tracker = primaryOutcomeData?.decimalOdds ?? 1;
+    setChartPoints(Array.from({ length: 24 }, (_, idx) => ({ t: Date.now() - (24 - idx) * 3000, value: tracker })));
+  }, [primaryOutcome]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const tick = async () => {
+      const res = await getMarketOddsAction(market.id);
+      if (!isMounted || !res.success) return;
+      const snapshot = res.snapshot;
+      setLiveOutcomes(snapshot.outcomes);
+      setLiveTotalPoolCents(snapshot.totalPoolCents);
+      setLivePrizePoolCents(snapshot.prizePoolCents);
+      setLiveHouseMarginBps(snapshot.houseMarginBps);
+      setIsLiveOddsOn(snapshot.hasLiveOdds);
+
+      const trackedOutcome = primaryOutcome ?? snapshot.outcomes[0]?.outcome;
+      const trackedPoint = snapshot.outcomes.find((o) => o.outcome === trackedOutcome) ?? snapshot.outcomes[0];
+      if (!trackedPoint) return;
+
+      setChartPoints((prev) => {
+        const next = [...prev, { t: Date.now(), value: trackedPoint.decimalOdds }];
+        return next.slice(-28);
+      });
+    };
+
+    const pollTimer = setInterval(() => {
+      void tick();
+    }, 5000);
+
+    const countdown = setInterval(() => {
+      setNextRefreshIn((prev) => (prev <= 1 ? 5 : prev - 1));
+    }, 1000);
+
+    void tick();
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
+      clearInterval(countdown);
+    };
+  }, [market.id, primaryOutcome]);
 
   useEffect(() => {
     if (!isCooldownActive) return;
@@ -471,7 +648,7 @@ export function MarketDetailClient({
           <span className="text-[11px] font-mono text-fg-muted bg-bg-above px-2 py-0.5 rounded-md">
             {CATEGORY_EMOJI[market.category]} {market.category}
           </span>
-          {hasLiveOdds ? (
+          {isLiveOddsOn ? (
             <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-green/10 text-green">
               <span className="w-1.5 h-1.5 rounded-full bg-green animate-livepulse" />
               LIVE ODDS
@@ -487,9 +664,9 @@ export function MarketDetailClient({
         {/* Pool stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: "Total Pool", value: formatKES(totalPoolCents, true), color: "text-fg" },
-            { label: "Prize Pool", value: formatKES(prizePoolCents, true), color: "text-green" },
-            { label: "House Edge", value: `${(houseMarginBps / 100).toFixed(0)}%`, color: "text-amber" },
+            { label: "Total Pool", value: formatKES(liveTotalPoolCents, true), color: "text-fg" },
+            { label: "Prize Pool", value: formatKES(livePrizePoolCents, true), color: "text-green" },
+            { label: "House Edge", value: `${(liveHouseMarginBps / 100).toFixed(0)}%`, color: "text-amber" },
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-line bg-bg-above/30 p-3">
               <p className="text-[11px] font-mono text-fg-muted mb-1">{stat.label}</p>
@@ -500,12 +677,21 @@ export function MarketDetailClient({
       </div>
 
       {/* ── Pool Distribution — Donut + Legend ── */}
+      <LivePriceChart
+        title={primaryOutcomeData ? `${primaryOutcomeData.outcome} live odds` : "Market live odds"}
+        points={chartPoints}
+        colorHex={primaryColor.hex}
+        nextRefreshIn={nextRefreshIn}
+        currentOdds={primaryOutcomeData?.decimalOdds ?? 1}
+        deltaPct={chartDeltaPct}
+      />
+
       <div className="rounded-2xl border border-line bg-bg-above/20 p-5">
         <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider mb-4">Pool Distribution</p>
         <div className="flex items-center gap-6 flex-wrap">
-          <DonutChart outcomes={outcomes} totalPoolCents={totalPoolCents} />
+          <DonutChart outcomes={liveOutcomes} totalPoolCents={liveTotalPoolCents} />
           <div className="flex-1 min-w-[160px] space-y-3">
-            {outcomes.map((o, i) => {
+            {liveOutcomes.map((o, i) => {
               const color = OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0];
               return (
                 <div key={o.outcome} className="space-y-1">
@@ -534,7 +720,7 @@ export function MarketDetailClient({
         {/* ── Outcomes ── */}
         <div className="lg:col-span-3 space-y-3">
           <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Pick Your Outcome</p>
-          {outcomes.map((o, i) => {
+          {liveOutcomes.map((o, i) => {
             const color = OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0];
             const isSelected = selectedOutcome === o.outcome;
             const isLoser = selectedOutcome && selectedOutcome !== o.outcome;
@@ -858,7 +1044,7 @@ export function MarketDetailClient({
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-lg border border-line bg-bg-above/20 p-3 text-center">
                   <p className="text-[10px] font-mono text-fg-muted uppercase">Current Pool</p>
-                  <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">{formatKES(totalPoolCents, true)}</p>
+                  <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">{formatKES(liveTotalPoolCents, true)}</p>
                 </div>
                 <div className="rounded-lg border border-green/20 bg-green/5 p-3 text-center">
                   <p className="text-[10px] font-mono text-green/70 uppercase">Your Odds</p>
