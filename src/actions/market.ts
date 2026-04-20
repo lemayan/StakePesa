@@ -64,28 +64,30 @@ export async function placeBetAction(input: z.infer<typeof placeBetSchema>): Pro
 
     const { marketId, outcome, stakeCents, requestId } = parsed.data
 
-    const scope = `market-place-bet:${session.user.id}`
-    const requestHash = createHash("sha256")
-        .update(JSON.stringify({ marketId, outcome, stakeCents, userId: session.user.id }))
-        .digest("hex")
-
-    const claim = await claimIdempotencyKey(scope, requestId, requestHash)
-    if (claim.kind === "mismatch") {
-        return { error: "This request ID was already used with a different payload." }
-    }
-    if (claim.kind === "in-progress") {
-        return { error: "This bet is still processing. Please wait." }
-    }
-    if (claim.kind === "completed") {
-        if (typeof claim.responseBody === "object" && claim.responseBody !== null) {
-            return claim.responseBody as PlaceBetActionResponse
-        }
-        return { error: "Unable to replay previous response for this request." }
-    }
-
-    const idempotencyRecordId = claim.id
+    let idempotencyRecordId: string | null = null
 
     try {
+        const scope = `market-place-bet:${session.user.id}`
+        const requestHash = createHash("sha256")
+            .update(JSON.stringify({ marketId, outcome, stakeCents, userId: session.user.id }))
+            .digest("hex")
+
+        const claim = await claimIdempotencyKey(scope, requestId, requestHash)
+        if (claim.kind === "mismatch") {
+            return { error: "This request ID was already used with a different payload." }
+        }
+        if (claim.kind === "in-progress") {
+            return { error: "This bet is still processing. Please wait." }
+        }
+        if (claim.kind === "completed") {
+            if (typeof claim.responseBody === "object" && claim.responseBody !== null) {
+                return claim.responseBody as PlaceBetActionResponse
+            }
+            return { error: "Unable to replay previous response for this request." }
+        }
+
+        idempotencyRecordId = claim.id
+
         // Pre-fetch wallet balance (passed to service to avoid extra DB round-trip)
         const walletBalance = await getWalletBalance(session.user.id)
 
@@ -119,9 +121,12 @@ export async function placeBetAction(input: z.infer<typeof placeBetSchema>): Pro
         return responseBody
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Unknown error"
-        await failIdempotencyKey(idempotencyRecordId, message).catch(() => {
-            // Preserve original error path even if idempotency fail-marking fails.
-        })
+        if (idempotencyRecordId) {
+            await failIdempotencyKey(idempotencyRecordId, message).catch(() => {
+                // Preserve original error path even if idempotency fail-marking fails.
+            })
+        }
+        console.error("[placeBetAction] Error:", message)
         return { error: `Bet placement failed: ${message}` }
     }
 }

@@ -14,6 +14,7 @@ export async function claimIdempotencyKey(
 ): Promise<IdempotencyClaimResult> {
   const inserted = await db.$queryRaw<{ id: string }[]>(
     Prisma.sql`INSERT INTO "IdempotencyRequest" (
+      id,
       scope,
       key,
       "requestHash",
@@ -21,6 +22,7 @@ export async function claimIdempotencyKey(
       "createdAt",
       "updatedAt"
     ) VALUES (
+      gen_random_uuid(),
       ${scope},
       ${key},
       ${requestHash},

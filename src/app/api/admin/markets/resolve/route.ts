@@ -73,26 +73,28 @@ export async function POST(request: Request) {
         .update(JSON.stringify(data))
         .digest("hex")
 
-    const claim = await claimIdempotencyKey(idempotencyScope, idempotencyKey, requestHash)
-    if (claim.kind === "mismatch") {
-        return NextResponse.json(
-            { error: "Idempotency key reused with different payload." },
-            { status: 409 }
-        )
-    }
-    if (claim.kind === "completed") {
-        return NextResponse.json(claim.responseBody, { status: claim.responseStatus })
-    }
-    if (claim.kind === "in-progress") {
-        return NextResponse.json(
-            { error: "A request with this idempotency key is still processing." },
-            { status: 409 }
-        )
-    }
-
-    const idempotencyRecordId = claim.id
+    let idempotencyRecordId: string | null = null
 
     try {
+        const claim = await claimIdempotencyKey(idempotencyScope, idempotencyKey, requestHash)
+        if (claim.kind === "mismatch") {
+            return NextResponse.json(
+                { error: "Idempotency key reused with different payload." },
+                { status: 409 }
+            )
+        }
+        if (claim.kind === "completed") {
+            return NextResponse.json(claim.responseBody, { status: claim.responseStatus })
+        }
+        if (claim.kind === "in-progress") {
+            return NextResponse.json(
+                { error: "A request with this idempotency key is still processing." },
+                { status: 409 }
+            )
+        }
+
+        idempotencyRecordId = claim.id
+
         const currentState = await db.marketPool.findFirst({
             where: { marketId: data.marketId },
             orderBy: { updatedAt: "desc" },
@@ -177,10 +179,12 @@ export async function POST(request: Request) {
         }
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : "Unknown error"
-        try {
-            await failIdempotencyKey(idempotencyRecordId, message)
-        } catch (idempotencyErr) {
-            console.error("[ADMIN_RESOLVE_MARKET][IDEMPOTENCY_FAIL]", idempotencyErr)
+        if (idempotencyRecordId) {
+            try {
+                await failIdempotencyKey(idempotencyRecordId, message)
+            } catch (idempotencyErr) {
+                console.error("[ADMIN_RESOLVE_MARKET][IDEMPOTENCY_FAIL]", idempotencyErr)
+            }
         }
         console.error("[ADMIN_RESOLVE_MARKET]", err)
         return NextResponse.json({ error: message }, { status: 500 })
