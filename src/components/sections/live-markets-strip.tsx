@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -134,13 +135,38 @@ function Countdown({ target }: { target: Date }) {
 // ── Market Card ───────────────────────────────────────────────────────────────
 
 function LiveCard({ card }: { card: LiveMarketCard }) {
+  const router = useRouter()
   const positive = (card.liveChange ?? 0) >= 0
+  const detailHref = `/dashboard/markets/${card.marketId}`
+
+  useEffect(() => {
+    router.prefetch(detailHref)
+  }, [router, detailHref])
+
+  const openCard = () => {
+    router.push(detailHref)
+  }
+
+  const openWithPick = (pick: "yes" | "no") => {
+    router.push(`${detailHref}?pick=${pick}`)
+  }
 
   return (
-    <motion.div
+    <motion.article
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative shrink-0 w-[280px] rounded-2xl border border-line bg-bg-above/30 backdrop-blur-sm overflow-hidden flex flex-col"
+      onPointerEnter={() => router.prefetch(detailHref)}
+      onFocus={() => router.prefetch(detailHref)}
+      onClick={openCard}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          openCard()
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      className="relative shrink-0 w-[280px] rounded-2xl border border-line bg-bg-above/30 backdrop-blur-sm overflow-hidden flex flex-col cursor-pointer"
     >
       {/* Top accent bar */}
       <div className={`h-0.5 w-full ${
@@ -191,28 +217,40 @@ function LiveCard({ card }: { card: LiveMarketCard }) {
 
         {/* Bet buttons */}
         <div className="grid grid-cols-2 gap-2 mt-auto">
-          <Link
-            href={`/dashboard/markets/${card.marketId}`}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              openWithPick("yes")
+            }}
             className="h-9 rounded-xl bg-green/10 border border-green/30 text-green text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-green/20 transition-colors"
           >
             YES <span className="text-[10px] opacity-70">{card.yesOdds}%</span>
-          </Link>
-          <Link
-            href={`/dashboard/markets/${card.marketId}`}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              openWithPick("no")
+            }}
             className="h-9 rounded-xl bg-red/10 border border-red/30 text-red text-[12px] font-bold flex items-center justify-center gap-1.5 hover:bg-red/20 transition-colors"
           >
             NO <span className="text-[10px] opacity-70">{card.noOdds}%</span>
-          </Link>
+          </button>
         </div>
 
-        <Link
-          href={`/dashboard/markets/${card.marketId}`}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            openCard()
+          }}
           className="text-[10px] font-mono text-fg-muted hover:text-fg transition-colors text-center"
         >
           View live chart →
-        </Link>
+        </button>
       </div>
-    </motion.div>
+    </motion.article>
   )
 }
 

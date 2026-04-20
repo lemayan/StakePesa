@@ -41,6 +41,7 @@ type Props = {
   hasLiveOdds: boolean;
   walletBalanceCents: number;
   isLoggedIn: boolean;
+  initialSelectedOutcome?: string | null;
 };
 
 const PRESET_AMOUNTS_KES = [10, 50, 100, 500, 1000];
@@ -523,9 +524,9 @@ function CommentSection({ marketId, isLoggedIn }: { marketId: string; isLoggedIn
 
 export function MarketDetailClient({
   market, outcomes, totalPoolCents, prizePoolCents, houseMarginBps,
-  hasLiveOdds, walletBalanceCents, isLoggedIn,
+  hasLiveOdds, walletBalanceCents, isLoggedIn, initialSelectedOutcome,
 }: Props) {
-  const [selectedOutcome, setSelectedOutcome] = useState<string | null>(null);
+  const [selectedOutcome, setSelectedOutcome] = useState<string | null>(initialSelectedOutcome ?? null);
   const [stakeKES, setStakeKES] = useState("");
   const [isPending, startTransition] = useTransition();
   const [toast, setToast] = useState<{ type: "success" | "error" | "info"; msg: string } | null>(null);
@@ -533,8 +534,6 @@ export function MarketDetailClient({
   const [placedBet, setPlacedBet] = useState<{ outcome: string; stakeCents: number; odds: number } | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
-  const [tradeSide, setTradeSide] = useState<"buy" | "sell">("buy");
-  const [executionMode, setExecutionMode] = useState<"instant" | "set-price">("instant");
   const [liveOutcomes, setLiveOutcomes] = useState(outcomes);
   const [liveTotalPoolCents, setLiveTotalPoolCents] = useState(totalPoolCents);
   const [livePrizePoolCents, setLivePrizePoolCents] = useState(prizePoolCents);
@@ -557,11 +556,6 @@ export function MarketDetailClient({
   const primaryOutcome = selectedOutcome ?? liveOutcomes[0]?.outcome ?? null;
   const primaryOutcomeData = liveOutcomes.find((o) => o.outcome === primaryOutcome) ?? liveOutcomes[0];
   const primaryColor = OUTCOME_COLORS[liveOutcomes.findIndex((o) => o.outcome === primaryOutcome)] ?? OUTCOME_COLORS[0];
-  const ticketOutcomes = liveOutcomes.slice(0, 2);
-  const canSubmitTicket = canBet && tradeSide === "buy";
-  const selectedOutcomeIdx = liveOutcomes.findIndex((o) => o.outcome === selectedOutcome);
-  const selectedOutcomeColor = OUTCOME_COLORS[selectedOutcomeIdx >= 0 ? selectedOutcomeIdx : 0] ?? OUTCOME_COLORS[0];
-  const maxStakeKES = Math.floor(walletBalanceCents / 100);
 
   const chartDeltaPct = chartPoints.length > 1
     ? ((chartPoints[chartPoints.length - 1]!.value - chartPoints[0]!.value) / chartPoints[0]!.value) * 100
@@ -652,6 +646,29 @@ export function MarketDetailClient({
     }, 1000);
     return () => clearInterval(timer);
   }, [isCooldownActive]);
+
+  useEffect(() => {
+    if (!selectedOutcome || stakeCents < 1000) {
+      setEstimate(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      const res = await estimatePayoutAction(market.id, selectedOutcome, stakeCents);
+      if (cancelled || !res.success) return;
+      setEstimate({
+        returnCents: res.estimatedReturnCents!,
+        profitCents: res.estimatedProfitCents!,
+        odds: res.currentOdds!,
+      });
+    }, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [market.id, selectedOutcome, stakeCents, liveOutcomes]);
 
   const formatCooldown = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -898,171 +915,103 @@ export function MarketDetailClient({
         {/* ── Bet Panel ── */}
         <div className="lg:col-span-2 space-y-4">
 
-          <div className="rounded-2xl border border-line bg-bg p-4 md:p-5 space-y-4 sticky top-16">
-            <div className="flex items-center gap-4 border-b border-line pb-2">
-              <button
-                onClick={() => setTradeSide("buy")}
-                className={`pb-1 text-[26px] leading-none font-black tracking-tight transition-colors ${tradeSide === "buy" ? "text-fg border-b-2 border-fg" : "text-fg-muted"}`}
-              >
-                Buy
-              </button>
-              <button
-                onClick={() => setTradeSide("sell")}
-                className={`pb-1 text-[26px] leading-none font-black tracking-tight transition-colors ${tradeSide === "sell" ? "text-fg border-b-2 border-fg" : "text-fg-muted"}`}
-              >
-                Sell
-              </button>
+          {isLoggedIn && (
+            <div className="rounded-xl border border-line bg-bg-above/20 p-3 flex items-center justify-between">
+              <span className="text-[12px] font-mono text-fg-muted">Wallet</span>
+              <span className="text-[14px] font-mono font-bold tabular-nums">{formatKES(walletBalanceCents)}</span>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-line bg-bg p-4 space-y-3">
+            <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Your Stake (KES)</p>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-mono text-fg-muted">KES</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={stakeKES}
+                onChange={(e) => handleStakeChange(e.target.value)}
+                min={10}
+                max={100000}
+                disabled={!isLoggedIn}
+                className="w-full h-11 pl-12 pr-3 text-[16px] font-mono font-bold bg-bg-above rounded-lg border border-line focus:outline-none focus:border-green/50 transition-colors tabular-nums disabled:opacity-50"
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => setExecutionMode("instant")}
-                className={`h-9 rounded-lg text-[13px] font-semibold transition-all ${executionMode === "instant" ? "bg-green text-white shadow-lg shadow-green/20" : "bg-bg-above text-fg-secondary border border-line"}`}
-              >
-                Instant
-              </button>
-              <button
-                onClick={() => setExecutionMode("set-price")}
-                className={`h-9 rounded-lg text-[13px] font-semibold transition-all ${executionMode === "set-price" ? "bg-bg-above text-fg border border-line-bright" : "bg-bg-above text-fg-secondary border border-line"}`}
-              >
-                Set Price
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Select your prediction</p>
-              <div className="grid grid-cols-2 gap-2">
-                {ticketOutcomes.map((o, i) => {
-                  const isSelected = selectedOutcome === o.outcome;
-                  const color = OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0];
-                  return (
-                    <button
-                      key={o.outcome}
-                      onClick={() => handleOutcomeSelect(o.outcome)}
-                      disabled={!isLoggedIn || tradeSide === "sell"}
-                      className={`h-14 rounded-xl border text-left px-3 transition-all ${
-                        isSelected
-                          ? "border-green/50 bg-green/10 shadow-[0_0_0_1px_rgba(34,197,94,0.25)]"
-                          : "border-line bg-bg-above/40 hover:border-line-bright"
-                      } disabled:opacity-45`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-bold uppercase truncate">{o.outcome}</span>
-                        <span className={`text-[12px] font-mono font-bold ${isSelected ? "text-green" : color.text}`}>{o.decimalOdds.toFixed(2)}x</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-line bg-bg-above/25 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-fg-secondary">Amount</span>
-                {isLoggedIn && <span className="text-[11px] font-mono text-fg-muted">Wallet {formatKES(walletBalanceCents, true)}</span>}
-              </div>
-              <div className="rounded-lg border border-line bg-bg px-3 h-12 flex items-center justify-between">
-                <span className="text-[28px] leading-none font-black text-fg-muted">KES</span>
-                <input
-                  type="number"
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  value={stakeKES}
-                  onChange={(e) => handleStakeChange(e.target.value)}
-                  min={10}
-                  max={100000}
-                  disabled={!isLoggedIn || tradeSide === "sell" || executionMode === "set-price"}
-                  className="w-[72%] text-right bg-transparent border-0 focus:outline-none text-[40px] leading-none font-black tabular-nums disabled:opacity-50"
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {PRESET_AMOUNTS_KES.map((amt) => (
-                  <button
-                    key={amt}
-                    onClick={() => handleStakeChange(amt.toString())}
-                    disabled={!isLoggedIn || tradeSide === "sell" || executionMode === "set-price"}
-                    className={`h-7 px-2.5 rounded-md border text-[11px] font-mono transition-colors ${parseFloat(stakeKES) === amt ? "border-green/50 bg-green/10 text-green" : "border-line bg-bg text-fg-muted hover:text-fg"} disabled:opacity-45`}
-                  >
-                    +KES {amt.toLocaleString()}
-                  </button>
-                ))}
+            <div className="flex gap-1.5 flex-wrap">
+              {PRESET_AMOUNTS_KES.map((amt) => (
                 <button
-                  onClick={() => handleStakeChange(maxStakeKES > 0 ? maxStakeKES.toString() : "")}
-                  disabled={!isLoggedIn || maxStakeKES <= 0 || tradeSide === "sell" || executionMode === "set-price"}
-                  className="h-7 px-2.5 rounded-md border border-line bg-bg text-[11px] font-mono text-fg-muted hover:text-fg disabled:opacity-45"
+                  key={amt}
+                  onClick={() => handleStakeChange(amt.toString())}
+                  disabled={!isLoggedIn}
+                  className={`h-7 px-2.5 text-[11px] font-mono rounded-md border transition-all ${
+                    parseFloat(stakeKES) === amt
+                      ? "border-green bg-green/8 text-green"
+                      : "border-line text-fg-muted hover:border-line-bright hover:text-fg-secondary"
+                  } disabled:opacity-50`}
                 >
-                  Max
+                  {amt >= 1000 ? `${amt / 1000}K` : amt}
                 </button>
-              </div>
+              ))}
             </div>
 
             <AnimatePresence>
               {estimate && selectedOutcome && (
                 <motion.div
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  className="rounded-xl border border-line bg-linear-to-r from-bg-above/30 to-bg-above/10 p-4 space-y-2"
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="rounded-lg border border-green/20 bg-green/5 p-3 space-y-1.5"
                 >
-                  <div className="flex items-center justify-between text-[12px]">
-                    <span className="text-fg-muted">You put in</span>
-                    <span className="font-mono font-bold tabular-nums">{formatKES(stakeCents || 0, true)}</span>
+                  <p className="text-[10px] font-mono text-green/70 uppercase tracking-wider">Estimated Payout (Live)</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[12px] font-mono text-fg-muted">If {selectedOutcome} wins</span>
+                    <span className="text-[16px] font-mono font-bold text-green tabular-nums">{formatKES(estimate.returnCents)}</span>
                   </div>
-                  <div className="flex items-end justify-between border-t border-line pt-2">
-                    <div>
-                      <p className="text-[11px] font-mono text-fg-muted">If {selectedOutcome} wins</p>
-                      <p className="text-[24px] leading-none font-black mt-1" style={{ color: selectedOutcomeColor.hex }}>
-                        {formatKES(estimate.returnCents, true)}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className={`text-[12px] font-mono font-semibold ${estimate.profitCents >= 0 ? "text-green" : "text-red"}`}>
-                        {estimate.profitCents >= 0 ? "+" : ""}{formatKES(estimate.profitCents, true)}
-                      </p>
-                      <p className="text-[10px] font-mono text-fg-muted">{estimate.odds.toFixed(2)}x current odds</p>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono text-fg-muted">Net profit</span>
+                    <span className={`text-[12px] font-mono font-semibold tabular-nums ${estimate.profitCents >= 0 ? "text-green" : "text-red"}`}>
+                      {estimate.profitCents >= 0 ? "+" : ""}{formatKES(estimate.profitCents)}
+                    </span>
                   </div>
+                  <div className="flex items-center justify-between border-t border-green/10 pt-1.5">
+                    <span className="text-[11px] font-mono text-fg-muted">Current odds</span>
+                    <span className="text-[12px] font-mono font-bold text-green">{estimate.odds.toFixed(2)}x</span>
+                  </div>
+                  <p className="text-[9px] font-mono text-fg-muted">Updates automatically as live odds and pool depth change.</p>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {executionMode === "set-price" && (
-              <p className="text-[11px] font-mono text-amber">Set Price mode is coming soon. Use Instant for now.</p>
-            )}
-            {tradeSide === "sell" && (
-              <p className="text-[11px] font-mono text-amber">Sell tickets are coming soon. Buy flow is live.</p>
-            )}
             {stakeKES && stakeCents < 1000 && <p className="text-[11px] font-mono text-red">Minimum bet is KES 10</p>}
             {stakeCents > walletBalanceCents && isLoggedIn && <p className="text-[11px] font-mono text-red">Insufficient wallet balance</p>}
             {isCooldownActive && <p className="text-[11px] font-mono text-amber">Betting cooldown: {formatCooldown(cooldownSeconds ?? 0)} remaining</p>}
 
             <motion.button
-              whileHover={canSubmitTicket ? { scale: 1.01 } : {}}
-              whileTap={canSubmitTicket ? { scale: 0.985 } : {}}
+              whileHover={canBet ? { scale: 1.01 } : {}}
+              whileTap={canBet ? { scale: 0.98 } : {}}
               onClick={handlePlaceBet}
-              disabled={!canSubmitTicket || isPending || executionMode === "set-price"}
-              className={`w-full h-12 rounded-xl text-[15px] font-black uppercase tracking-wide transition-all ${
-                canSubmitTicket && !isPending && executionMode === "instant"
-                  ? "bg-green text-white hover:opacity-90 shadow-lg shadow-green/20"
+              disabled={!canBet || isPending}
+              className={`w-full h-11 rounded-xl text-[14px] font-bold transition-all ${
+                canBet && !isPending
+                  ? "bg-green text-white hover:opacity-90 shadow-lg shadow-green/20 animate-glow"
                   : "bg-bg-above text-fg-muted cursor-not-allowed"
               }`}
             >
-              {isPending
-                ? "Placing..."
-                : tradeSide === "sell"
-                  ? "Sell coming soon"
-                  : executionMode === "set-price"
-                    ? "Set price coming soon"
-                    : !selectedOutcome
-                      ? "Select up or down"
-                      : !isValidStake
-                        ? "Enter amount"
-                        : `Select ${selectedOutcome}`}
+              {isPending ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Placing bet…
+                </span>
+              ) : isCooldownActive ? `Locked ${formatCooldown(cooldownSeconds ?? 0)}` : !selectedOutcome ? "Select an outcome" : !isValidStake ? "Enter stake (min KES 10)" : `Bet ${stakeKES ? `KES ${parseFloat(stakeKES).toLocaleString()}` : ""} on ${selectedOutcome}`}
             </motion.button>
 
             <p className="text-[10px] font-mono text-fg-muted text-center">
-              By trading, you agree to the market terms and pari-mutuel rules.
+              5% house margin · Pari-mutuel payout · Funds locked until resolution
             </p>
           </div>
 

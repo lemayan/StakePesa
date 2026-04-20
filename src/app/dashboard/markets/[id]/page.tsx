@@ -15,8 +15,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
-export default async function MarketDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MarketDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ pick?: string }>
+}) {
   const { id } = await params;
+  const { pick } = await searchParams;
 
   const staticMarket = await getMarketCatalogById(id);
   if (!staticMarket) notFound();
@@ -41,6 +48,13 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
     hasAction: false,
   }));
 
+  const normalizedPick = pick?.toLowerCase();
+  const initialSelectedOutcome = normalizedPick === "yes"
+    ? outcomes[0]?.outcome ?? null
+    : normalizedPick === "no"
+      ? outcomes[1]?.outcome ?? null
+      : null;
+
   return (
     <MarketDetailClient
       market={staticMarket}
@@ -52,6 +66,7 @@ export default async function MarketDetailPage({ params }: { params: Promise<{ i
       hasLiveOdds={snapshot?.hasLiveOdds ?? false}
       walletBalanceCents={walletBalance}
       isLoggedIn={!!userId}
+      initialSelectedOutcome={initialSelectedOutcome}
     />
   );
 }

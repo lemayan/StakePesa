@@ -215,7 +215,7 @@ export function MarketsClient({ markets }: { markets: MarketEntry[] }) {
                 transition={{ delay: i * 0.04, duration: 0.3 }}
                 className="bg-bg hover:bg-bg-above/40 transition-colors group"
               >
-                <Link href={`/dashboard/markets/${market.id}`} className="block p-5">
+                <Link href={`/dashboard/markets/${market.id}`} prefetch className="block p-5">
                   {/* Category + live badge */}
                   <div className="flex items-center gap-1.5 mb-3">
                     <span className="text-[10px] font-mono text-fg-muted bg-bg-above px-2 py-0.5 rounded-md">
