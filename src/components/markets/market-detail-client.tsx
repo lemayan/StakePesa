@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition, useCallback, useEffect } from "react";
+import { useState, useTransition, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { placeBetAction, estimatePayoutAction } from "@/actions/market";
+import { placeBetAction, estimatePayoutAction, postCommentAction, getCommentsAction } from "@/actions/market";
+import type { MarketCommentData } from "@/actions/market";
 
 type OutcomeOdds = {
   outcome: string;
@@ -42,6 +44,14 @@ const CATEGORY_EMOJI: Record<string, string> = {
   tech: "🤖", economics: "📊", climate: "🌍", health: "🏥",
 };
 
+const OUTCOME_COLORS = [
+  { stroke: "#22c55e", bg: "bg-green-500",   text: "text-green-400",   hex: "#22c55e" },
+  { stroke: "#f59e0b", bg: "bg-amber-500",   text: "text-amber-400",   hex: "#f59e0b" },
+  { stroke: "#ef4444", bg: "bg-red-500",     text: "text-red-400",     hex: "#ef4444" },
+  { stroke: "#60a5fa", bg: "bg-blue-400",    text: "text-blue-400",    hex: "#60a5fa" },
+  { stroke: "#a78bfa", bg: "bg-purple-400",  text: "text-purple-400",  hex: "#a78bfa" },
+];
+
 function formatKES(cents: number, compact = false) {
   const kes = cents / 100;
   if (compact && kes >= 1_000_000) return `KES ${(kes / 1_000_000).toFixed(1)}M`;
@@ -49,23 +59,280 @@ function formatKES(cents: number, compact = false) {
   return `KES ${kes.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function OddsBar({ outcomes }: { outcomes: OutcomeOdds[] }) {
-  const colors = ["bg-green", "bg-amber", "bg-red", "bg-blue-400", "bg-purple-400"];
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function getInitials(name: string | null) {
+  if (!name) return "?";
+  return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+}
+
+// ── Donut Chart ───────────────────────────────────────────────────────────────
+
+function DonutChart({
+  outcomes,
+  totalPoolCents,
+}: {
+  outcomes: OutcomeOdds[];
+  totalPoolCents: number;
+}) {
+  const size = 200;
+  const strokeWidth = 24;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const cx = size / 2;
+  const cy = size / 2;
+
+  // If no pool yet, show equal ghost segments
+  const hasPool = totalPoolCents > 0;
+  const segments = outcomes.map((o, i) => ({
+    ...o,
+    pct: hasPool ? o.poolPercentage / 100 : 1 / outcomes.length,
+    color: OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0],
+  }));
+
+  let cumulativePct = 0;
+  const GAP = 0.015; // gap between segments
+
   return (
-    <div className="h-2 flex w-full rounded-full overflow-hidden bg-line gap-px">
-      {outcomes.map((o, i) => (
-        <motion.div
-          key={o.outcome}
-          initial={{ width: 0 }}
-          animate={{ width: `${o.poolPercentage}%` }}
-          transition={{ delay: i * 0.1, duration: 0.8, ease: "easeOut" }}
-          className={`${colors[i] ?? "bg-fg-muted"} h-full`}
-          title={`${o.outcome}: ${o.poolPercentage}%`}
-        />
-      ))}
+    <div className="relative flex items-center justify-center">
+      <svg width={size} height={size} className="-rotate-90">
+        {segments.map((seg, i) => {
+          const segPct = Math.max(0, seg.pct - GAP);
+          const offset = circumference * (1 - segPct);
+          const rotation = cumulativePct * 360;
+          cumulativePct += seg.pct;
+          return (
+            <motion.circle
+              key={seg.outcome}
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill="none"
+              stroke={hasPool ? seg.color.hex : "#ffffff10"}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              initial={{ strokeDashoffset: circumference }}
+              animate={{ strokeDashoffset: offset }}
+              transition={{ duration: 1.2, delay: i * 0.15, ease: "easeOut" }}
+              strokeLinecap="butt"
+              style={{ transformOrigin: `${cx}px ${cy}px`, transform: `rotate(${rotation}deg)` }}
+            />
+          );
+        })}
+        {/* Inner ring glow */}
+        <circle cx={cx} cy={cy} r={radius - strokeWidth / 2 - 4} fill="none" stroke="#ffffff05" strokeWidth={1} />
+      </svg>
+
+      {/* Centre label */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+        <p className="text-[10px] font-mono text-fg-muted uppercase tracking-wider">Total Pool</p>
+        <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">
+          {formatKES(totalPoolCents, true)}
+        </p>
+        {!hasPool && (
+          <p className="text-[9px] font-mono text-fg-muted mt-1">No bets yet</p>
+        )}
+      </div>
     </div>
   );
 }
+
+// ── Animated Outcome Bar ──────────────────────────────────────────────────────
+
+function OutcomeBar({ pct, colorHex }: { pct: number; colorHex: string }) {
+  return (
+    <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+      <motion.div
+        initial={{ width: 0 }}
+        animate={{ width: `${pct}%` }}
+        transition={{ duration: 1, ease: "easeOut" }}
+        className="h-full rounded-full"
+        style={{ background: `linear-gradient(90deg, ${colorHex}80, ${colorHex})` }}
+      />
+    </div>
+  );
+}
+
+// ── Avatar ────────────────────────────────────────────────────────────────────
+
+function Avatar({ user }: { user: { name: string | null; image: string | null } }) {
+  if (user.image) {
+    return (
+      <Image
+        src={user.image}
+        alt={user.name ?? "User"}
+        width={32}
+        height={32}
+        className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-white/10"
+      />
+    );
+  }
+  return (
+    <div className="w-8 h-8 rounded-full bg-green/20 text-green flex items-center justify-center text-[11px] font-bold shrink-0 ring-1 ring-green/20">
+      {getInitials(user.name)}
+    </div>
+  );
+}
+
+// ── Comment Section ───────────────────────────────────────────────────────────
+
+function CommentSection({ marketId, isLoggedIn }: { marketId: string; isLoggedIn: boolean }) {
+  const [comments, setComments] = useState<MarketCommentData[]>([]);
+  const [body, setBody] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const maxLen = 280;
+
+  useEffect(() => {
+    startTransition(async () => {
+      const res = await getCommentsAction(marketId);
+      if ("success" in res) setComments(res.comments);
+      setLoaded(true);
+    });
+  }, [marketId]);
+
+  const handlePost = () => {
+    if (!body.trim() || isPending) return;
+    setError(null);
+    const optimisticId = `opt-${Date.now()}`;
+    const optimistic: MarketCommentData = {
+      id: optimisticId,
+      body: body.trim(),
+      createdAt: new Date().toISOString(),
+      user: { id: "me", name: "You", image: null },
+    };
+    setComments((prev) => [optimistic, ...prev]);
+    const draft = body;
+    setBody("");
+    startTransition(async () => {
+      const res = await postCommentAction(marketId, draft);
+      if ("error" in res) {
+        setError(res.error);
+        setComments((prev) => prev.filter((c) => c.id !== optimisticId));
+        setBody(draft);
+      } else {
+        setComments((prev) =>
+          prev.map((c) => (c.id === optimisticId ? res.comment : c))
+        );
+      }
+    });
+  };
+
+  return (
+    <div className="space-y-4 pt-6 border-t border-line">
+      <div className="flex items-center gap-2">
+        <svg className="w-4 h-4 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+        </svg>
+        <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Discussion</p>
+        {comments.length > 0 && (
+          <span className="text-[10px] font-mono text-fg-muted bg-bg-above px-1.5 py-0.5 rounded-md">
+            {comments.length}
+          </span>
+        )}
+      </div>
+
+      {/* Input */}
+      {isLoggedIn ? (
+        <div className="space-y-2">
+          <div className="relative">
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value.slice(0, maxLen))}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handlePost(); }}
+              placeholder="Share your take on this market…"
+              rows={2}
+              className="w-full bg-bg-above/40 border border-line rounded-xl px-3 py-2.5 text-[13px] text-fg placeholder:text-fg-muted resize-none focus:outline-none focus:border-green/40 transition-colors"
+            />
+            <span className={`absolute bottom-2.5 right-3 text-[10px] font-mono tabular-nums ${body.length > 250 ? "text-amber" : "text-fg-muted"}`}>
+              {maxLen - body.length}
+            </span>
+          </div>
+          {error && <p className="text-[11px] font-mono text-red">{error}</p>}
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-mono text-fg-muted">Ctrl+Enter to post</p>
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={handlePost}
+              disabled={isPending || !body.trim()}
+              className="h-8 px-4 rounded-lg bg-green text-white text-[12px] font-semibold disabled:opacity-40 hover:opacity-90 transition-opacity"
+            >
+              {isPending ? "Posting…" : "Post"}
+            </motion.button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-line p-4 text-center space-y-2">
+          <p className="text-[12px] text-fg-muted">Join the discussion</p>
+          <Link href="/login" className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg bg-green text-white text-[12px] font-semibold hover:opacity-90 transition-opacity">
+            Log in to comment
+          </Link>
+        </div>
+      )}
+
+      {/* Feed */}
+      <div className="space-y-3">
+        {!loaded && (
+          <div className="space-y-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="flex gap-3">
+                <div className="w-8 h-8 rounded-full bg-bg-above animate-pulse shrink-0" />
+                <div className="flex-1 space-y-1.5 pt-1">
+                  <div className="h-2.5 bg-bg-above animate-pulse rounded w-1/4" />
+                  <div className="h-2 bg-bg-above animate-pulse rounded w-3/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <AnimatePresence>
+          {loaded && comments.length === 0 && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-[12px] text-fg-muted text-center py-4"
+            >
+              No comments yet. Be the first to share your take! 🎯
+            </motion.p>
+          )}
+
+          {comments.map((c) => (
+            <motion.div
+              key={c.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="flex gap-3"
+            >
+              <Avatar user={c.user} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[12px] font-semibold truncate">{c.user.name ?? "Anonymous"}</span>
+                  <span className="text-[10px] font-mono text-fg-muted shrink-0">{timeAgo(c.createdAt)}</span>
+                </div>
+                <p className="text-[12px] text-fg-secondary mt-0.5 leading-relaxed break-words">{c.body}</p>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export function MarketDetailClient({
   market, outcomes, totalPoolCents, prizePoolCents, houseMarginBps,
@@ -81,22 +348,18 @@ export function MarketDetailClient({
   const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   const stakeCents = Math.round((parseFloat(stakeKES) || 0) * 100);
-  const isValidStake = stakeCents >= 1000; // min KES 10
+  const isValidStake = stakeCents >= 1000;
   const isCooldownActive = (cooldownSeconds ?? 0) > 0;
   const canBet = isLoggedIn && selectedOutcome && isValidStake && !isCooldownActive;
 
   useEffect(() => {
     if (!isCooldownActive) return;
-
     const timer = setInterval(() => {
       setCooldownSeconds((prev) => {
-        if (!prev || prev <= 1) {
-          return null;
-        }
+        if (!prev || prev <= 1) return null;
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, [isCooldownActive]);
 
@@ -162,10 +425,7 @@ export function MarketDetailClient({
         const retryAfterSeconds = typeof res.retryAfterSeconds === "number" ? res.retryAfterSeconds : 0;
         if (retryAfterSeconds > 0) {
           setCooldownSeconds(retryAfterSeconds);
-          showToast(
-            "error",
-            `Bet locked for ${formatCooldown(retryAfterSeconds)} due to fraud cooldown.`
-          );
+          showToast("error", `Bet locked for ${formatCooldown(retryAfterSeconds)} due to fraud cooldown.`);
           return;
         }
         const errorMessage = typeof res.error === "string" ? res.error : "Bet failed. Please try again.";
@@ -198,16 +458,14 @@ export function MarketDetailClient({
         )}
       </AnimatePresence>
 
-      {/* ── Back + breadcrumb ── */}
+      {/* ── Back ── */}
       <div className="flex items-center gap-2 text-[12px] font-mono text-fg-muted">
-        <Link href="/dashboard/markets" className="hover:text-fg transition-colors">
-          ← Markets
-        </Link>
+        <Link href="/dashboard/markets" className="hover:text-fg transition-colors">← Markets</Link>
         <span>/</span>
         <span className="text-fg-secondary truncate max-w-50">{market.title}</span>
       </div>
 
-      {/* ── Market header ── */}
+      {/* ── Header ── */}
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] font-mono text-fg-muted bg-bg-above px-2 py-0.5 rounded-md">
@@ -224,9 +482,7 @@ export function MarketDetailClient({
             </span>
           )}
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight">
-          {market.title}
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight leading-tight">{market.title}</h1>
 
         {/* Pool stats */}
         <div className="grid grid-cols-3 gap-3">
@@ -237,39 +493,49 @@ export function MarketDetailClient({
           ].map((stat) => (
             <div key={stat.label} className="rounded-xl border border-line bg-bg-above/30 p-3">
               <p className="text-[11px] font-mono text-fg-muted mb-1">{stat.label}</p>
-              <p className={`text-[18px] font-mono font-bold ${stat.color} tabular-nums`}>
-                {stat.value}
-              </p>
+              <p className={`text-[18px] font-mono font-bold ${stat.color} tabular-nums`}>{stat.value}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Pool distribution bar ── */}
-      <div className="space-y-2">
-        <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Pool Distribution</p>
-        <OddsBar outcomes={outcomes} />
-        <div className="flex flex-wrap gap-3 mt-2">
-          {outcomes.map((o, i) => {
-            const colors = ["text-green", "text-amber", "text-red", "text-blue-400", "text-purple-400"];
-            const dots = ["bg-green", "bg-amber", "bg-red", "bg-blue-400", "bg-purple-400"];
-            return (
-              <div key={o.outcome} className="flex items-center gap-1.5 text-[11px] font-mono text-fg-muted">
-                <div className={`w-2 h-2 rounded-full ${dots[i] ?? "bg-fg-muted"}`} />
-                <span>{o.outcome.length > 18 ? o.outcome.slice(0, 17) + "…" : o.outcome}</span>
-                <span className={`font-semibold ${colors[i] ?? "text-fg"}`}>{o.poolPercentage}%</span>
-              </div>
-            );
-          })}
+      {/* ── Pool Distribution — Donut + Legend ── */}
+      <div className="rounded-2xl border border-line bg-bg-above/20 p-5">
+        <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider mb-4">Pool Distribution</p>
+        <div className="flex items-center gap-6 flex-wrap">
+          <DonutChart outcomes={outcomes} totalPoolCents={totalPoolCents} />
+          <div className="flex-1 min-w-[160px] space-y-3">
+            {outcomes.map((o, i) => {
+              const color = OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0];
+              return (
+                <div key={o.outcome} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${color.bg}`} />
+                      <span className="text-[12px] font-medium truncate max-w-[120px]">{o.outcome}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-[12px] font-mono font-bold tabular-nums ${color.text}`}>
+                        {o.decimalOdds.toFixed(2)}x
+                      </span>
+                      <span className="text-[10px] font-mono text-fg-muted ml-1.5">{o.poolPercentage}%</span>
+                    </div>
+                  </div>
+                  <OutcomeBar pct={o.poolPercentage} colorHex={color.hex} />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-        {/* ── Outcomes (left 3 cols) ── */}
+        {/* ── Outcomes ── */}
         <div className="lg:col-span-3 space-y-3">
           <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Pick Your Outcome</p>
-          {outcomes.map((o) => {
+          {outcomes.map((o, i) => {
+            const color = OUTCOME_COLORS[i] ?? OUTCOME_COLORS[0];
             const isSelected = selectedOutcome === o.outcome;
             const isLoser = selectedOutcome && selectedOutcome !== o.outcome;
             return (
@@ -289,7 +555,7 @@ export function MarketDetailClient({
               >
                 <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-2">
                       <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
                         isSelected ? "border-green" : "border-line-bright"
                       }`}>
@@ -297,24 +563,16 @@ export function MarketDetailClient({
                       </div>
                       <p className="text-[14px] font-semibold truncate">{o.outcome}</p>
                     </div>
-                    {/* Mini pool bar */}
                     <div className="flex items-center gap-2 ml-6">
-                      <div className="flex-1 h-1 bg-line rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${o.poolPercentage}%` }}
-                          transition={{ duration: 0.8, ease: "easeOut" }}
-                          className="h-full bg-green/50 rounded-full"
-                        />
-                      </div>
-                      <span className="text-[10px] font-mono text-fg-muted">
-                        {formatKES(o.poolCents, true)} staked
+                      <OutcomeBar pct={o.poolPercentage} colorHex={color.hex} />
+                      <span className="text-[10px] font-mono text-fg-muted shrink-0">
+                        {formatKES(o.poolCents, true)} · {o.poolPercentage}%
                       </span>
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <p className={`text-[22px] font-mono font-bold tabular-nums leading-none ${
-                      isSelected ? "text-green" : "text-fg"
+                      isSelected ? "text-green" : color.text
                     }`}>
                       {o.decimalOdds.toFixed(2)}
                       <span className="text-[13px] font-normal text-fg-muted">x</span>
@@ -338,20 +596,16 @@ export function MarketDetailClient({
           )}
         </div>
 
-        {/* ── Bet panel (right 2 cols) ── */}
+        {/* ── Bet Panel ── */}
         <div className="lg:col-span-2 space-y-4">
 
-          {/* Wallet balance */}
           {isLoggedIn && (
             <div className="rounded-xl border border-line bg-bg-above/20 p-3 flex items-center justify-between">
               <span className="text-[12px] font-mono text-fg-muted">Wallet</span>
-              <span className="text-[14px] font-mono font-bold tabular-nums">
-                {formatKES(walletBalanceCents)}
-              </span>
+              <span className="text-[14px] font-mono font-bold tabular-nums">{formatKES(walletBalanceCents)}</span>
             </div>
           )}
 
-          {/* Stake input */}
           <div className="rounded-xl border border-line bg-bg p-4 space-y-3">
             <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">Your Stake (KES)</p>
             <div className="relative">
@@ -369,7 +623,6 @@ export function MarketDetailClient({
               />
             </div>
 
-            {/* Quick-pick preset amounts */}
             <div className="flex gap-1.5 flex-wrap">
               {PRESET_AMOUNTS_KES.map((amt) => (
                 <button
@@ -387,7 +640,6 @@ export function MarketDetailClient({
               ))}
             </div>
 
-            {/* Payout estimate */}
             <AnimatePresence>
               {estimate && selectedOutcome && (
                 <motion.div
@@ -399,15 +651,11 @@ export function MarketDetailClient({
                   <p className="text-[10px] font-mono text-green/70 uppercase tracking-wider">Estimated Payout</p>
                   <div className="flex items-center justify-between">
                     <span className="text-[12px] font-mono text-fg-muted">If {selectedOutcome} wins</span>
-                    <span className="text-[16px] font-mono font-bold text-green tabular-nums">
-                      {formatKES(estimate.returnCents)}
-                    </span>
+                    <span className="text-[16px] font-mono font-bold text-green tabular-nums">{formatKES(estimate.returnCents)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-mono text-fg-muted">Net profit</span>
-                    <span className={`text-[12px] font-mono font-semibold tabular-nums ${
-                      estimate.profitCents >= 0 ? "text-green" : "text-red"
-                    }`}>
+                    <span className={`text-[12px] font-mono font-semibold tabular-nums ${estimate.profitCents >= 0 ? "text-green" : "text-red"}`}>
                       {estimate.profitCents >= 0 ? "+" : ""}{formatKES(estimate.profitCents)}
                     </span>
                   </div>
@@ -415,27 +663,15 @@ export function MarketDetailClient({
                     <span className="text-[11px] font-mono text-fg-muted">Current odds</span>
                     <span className="text-[12px] font-mono font-bold text-green">{estimate.odds.toFixed(2)}x</span>
                   </div>
-                  <p className="text-[9px] font-mono text-fg-muted">
-                    * Estimates vary as more bets are placed (pari-mutuel)
-                  </p>
+                  <p className="text-[9px] font-mono text-fg-muted">* Estimates vary as more bets are placed (pari-mutuel)</p>
                 </motion.div>
               )}
             </AnimatePresence>
 
-            {/* Validation messages */}
-            {stakeKES && stakeCents < 1000 && (
-              <p className="text-[11px] font-mono text-red">Minimum bet is KES 10</p>
-            )}
-            {stakeCents > walletBalanceCents && isLoggedIn && (
-              <p className="text-[11px] font-mono text-red">Insufficient wallet balance</p>
-            )}
-            {isCooldownActive && (
-              <p className="text-[11px] font-mono text-amber">
-                Betting cooldown active: {formatCooldown(cooldownSeconds ?? 0)} remaining
-              </p>
-            )}
+            {stakeKES && stakeCents < 1000 && <p className="text-[11px] font-mono text-red">Minimum bet is KES 10</p>}
+            {stakeCents > walletBalanceCents && isLoggedIn && <p className="text-[11px] font-mono text-red">Insufficient wallet balance</p>}
+            {isCooldownActive && <p className="text-[11px] font-mono text-amber">Betting cooldown: {formatCooldown(cooldownSeconds ?? 0)} remaining</p>}
 
-            {/* Place bet button */}
             <motion.button
               whileHover={canBet ? { scale: 1.01 } : {}}
               whileTap={canBet ? { scale: 0.98 } : {}}
@@ -463,7 +699,7 @@ export function MarketDetailClient({
             </p>
           </div>
 
-          {/* Recent placed bet — compact inline confirmation */}
+          {/* Recent placed bet — compact card */}
           <AnimatePresence>
             {placedBet && !showPayoutModal && (
               <motion.div
@@ -487,13 +723,10 @@ export function MarketDetailClient({
             )}
           </AnimatePresence>
 
-          {/* Low wallet warning */}
           {isLoggedIn && walletBalanceCents < 1000 && (
             <div className="rounded-xl border border-amber/20 bg-amber/5 p-3 text-[12px] font-mono text-amber">
               <p className="font-semibold mb-0.5">Low balance</p>
-              <Link href="/dashboard/wallet" className="text-[11px] underline">
-                Top up your wallet →
-              </Link>
+              <Link href="/dashboard/wallet" className="text-[11px] underline">Top up your wallet →</Link>
             </div>
           )}
         </div>
@@ -521,9 +754,7 @@ export function MarketDetailClient({
                     <p className="text-[13px] font-semibold leading-snug">{item.headline}</p>
                     <p className="text-[12px] text-fg-muted mt-1">{item.summary}</p>
                     <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[10px] font-mono text-fg-muted">
-                        Confidence: {(item.confidence * 100).toFixed(0)}%
-                      </span>
+                      <span className="text-[10px] font-mono text-fg-muted">Confidence: {(item.confidence * 100).toFixed(0)}%</span>
                     </div>
                   </div>
                 </div>
@@ -533,7 +764,7 @@ export function MarketDetailClient({
         </div>
       )}
 
-      {/* ── How pari-mutuel works ── */}
+      {/* ── How odds work ── */}
       <div className="rounded-xl border border-line bg-bg-above/10 p-4 space-y-2">
         <p className="text-[11px] font-mono text-fg-muted uppercase tracking-wider">How odds work</p>
         <p className="text-[12px] text-fg-secondary leading-relaxed">
@@ -542,142 +773,127 @@ export function MarketDetailClient({
           early bettors on surprise outcomes earn more. The platform takes a fixed 5% margin; the rest is shared among winners.
         </p>
       </div>
+
+      {/* ── Comments ── */}
+      <CommentSection marketId={market.id} isLoggedIn={isLoggedIn} />
+
     </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          PARI-MUTUEL REASSURANCE MODAL — appears after every successful bet
-         ═══════════════════════════════════════════════════════════════════ */}
-      <AnimatePresence>
-        {showPayoutModal && placedBet && (
+    {/* ══════════════════════════════════════════════════════════════
+        PARI-MUTUEL REASSURANCE MODAL
+       ══════════════════════════════════════════════════════════════ */}
+    <AnimatePresence>
+      {showPayoutModal && placedBet && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          onClick={() => setShowPayoutModal(false)}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-            onClick={() => setShowPayoutModal(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.85, y: 30 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: "spring", damping: 22, stiffness: 280 }}
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md rounded-2xl border border-green/20 bg-bg shadow-2xl shadow-green/10 overflow-hidden"
           >
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-
-            {/* Modal card */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.85, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: "spring", damping: 22, stiffness: 280 }}
-              onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-md rounded-2xl border border-green/20 bg-bg shadow-2xl shadow-green/10 overflow-hidden"
-            >
-              {/* Top glow accent */}
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green/60 via-green to-green/60" />
-
-              <div className="p-6 space-y-5">
-
-                {/* ── Success header ── */}
-                <div className="text-center space-y-2">
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ type: "spring", delay: 0.15, damping: 12 }}
-                    className="w-16 h-16 rounded-full bg-green/10 border-2 border-green/30 flex items-center justify-center mx-auto"
-                  >
-                    <svg className="w-8 h-8 text-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                  </motion.div>
-                  <h2 className="text-xl font-bold">Bet Locked In!</h2>
-                  <p className="text-[13px] font-mono text-fg-muted">
-                    {formatKES(placedBet.stakeCents)} on <strong className="text-fg">{placedBet.outcome}</strong> at {placedBet.odds.toFixed(2)}x
-                  </p>
-                </div>
-
-                {/* ── Pool growth visual ── */}
-                <div className="rounded-xl border border-line bg-bg-above/30 p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">📈</span>
-                    <p className="text-[13px] font-semibold">Your payout keeps growing</p>
-                  </div>
-                  <p className="text-[12px] text-fg-secondary leading-relaxed">
-                    Every new bet placed by others on <em>different outcomes</em> adds to the prize pool.
-                    Your share of the pool is <strong className="text-green">locked in and guaranteed</strong> — it can only go <strong className="text-green">up</strong>, never down.
-                  </p>
-
-                  {/* Visual step progression */}
-                  <div className="space-y-2 pt-1">
-                    {[
-                      { icon: "🔒", label: "Your bet is secured", desc: "Stake locked at current odds" },
-                      { icon: "👥", label: "More people bet", desc: "The total prize pool grows" },
-                      { icon: "💰", label: "Your payout increases", desc: "Winners split a bigger pot" },
-                    ].map((step, i) => (
-                      <motion.div
-                        key={step.label}
-                        initial={{ opacity: 0, x: -16 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.3 + i * 0.15 }}
-                        className="flex items-center gap-3 rounded-lg bg-bg/60 px-3 py-2"
-                      >
-                        <span className="text-base shrink-0">{step.icon}</span>
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-semibold leading-tight">{step.label}</p>
-                          <p className="text-[10px] text-fg-muted">{step.desc}</p>
-                        </div>
-                        {i < 2 && (
-                          <svg className="w-3 h-3 text-green/50 ml-auto shrink-0 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        )}
-                      </motion.div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ── Key stats row ── */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border border-line bg-bg-above/20 p-3 text-center">
-                    <p className="text-[10px] font-mono text-fg-muted uppercase">Current Pool</p>
-                    <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">{formatKES(totalPoolCents, true)}</p>
-                  </div>
-                  <div className="rounded-lg border border-green/20 bg-green/5 p-3 text-center">
-                    <p className="text-[10px] font-mono text-green/70 uppercase">Your Odds</p>
-                    <p className="text-[16px] font-mono font-bold text-green tabular-nums mt-0.5">{placedBet.odds.toFixed(2)}x</p>
-                  </div>
-                </div>
-
-                {/* ── Assurance badge ── */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green/60 via-green to-green/60" />
+            <div className="p-6 space-y-5">
+              <div className="text-center space-y-2">
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.6 }}
-                  className="flex items-center gap-2 rounded-lg bg-green/5 border border-green/15 px-3 py-2"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", delay: 0.15, damping: 12 }}
+                  className="w-16 h-16 rounded-full bg-green/10 border-2 border-green/30 flex items-center justify-center mx-auto"
                 >
-                  <svg className="w-4 h-4 text-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.746 3.746 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.745 3.745 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                  <svg className="w-8 h-8 text-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                   </svg>
-                  <p className="text-[11px] text-green/90 font-medium leading-snug">
-                    The earlier you bet, the better your position. Share this market to grow the pool!
-                  </p>
                 </motion.div>
-
-                {/* ── Dismiss ── */}
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                  onClick={() => setShowPayoutModal(false)}
-                  className="w-full h-11 rounded-xl bg-green text-white text-[14px] font-bold hover:opacity-90 transition-opacity shadow-lg shadow-green/20"
-                >
-                  Got it — Let&apos;s go! 🚀
-                </motion.button>
+                <h2 className="text-xl font-bold">Bet Locked In!</h2>
+                <p className="text-[13px] font-mono text-fg-muted">
+                  {formatKES(placedBet.stakeCents)} on <strong className="text-fg">{placedBet.outcome}</strong> at {placedBet.odds.toFixed(2)}x
+                </p>
               </div>
-            </motion.div>
+
+              <div className="rounded-xl border border-line bg-bg-above/30 p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📈</span>
+                  <p className="text-[13px] font-semibold">Your payout keeps growing</p>
+                </div>
+                <p className="text-[12px] text-fg-secondary leading-relaxed">
+                  Every new bet placed by others on <em>different outcomes</em> adds to the prize pool.
+                  Your share is <strong className="text-green">locked in and guaranteed</strong> — it can only go <strong className="text-green">up</strong>, never down.
+                </p>
+                <div className="space-y-2 pt-1">
+                  {[
+                    { icon: "🔒", label: "Your bet is secured", desc: "Stake locked at current odds" },
+                    { icon: "👥", label: "More people bet", desc: "The total prize pool grows" },
+                    { icon: "💰", label: "Your payout increases", desc: "Winners split a bigger pot" },
+                  ].map((step, i) => (
+                    <motion.div
+                      key={step.label}
+                      initial={{ opacity: 0, x: -16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 + i * 0.15 }}
+                      className="flex items-center gap-3 rounded-lg bg-bg/60 px-3 py-2"
+                    >
+                      <span className="text-base shrink-0">{step.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-[12px] font-semibold leading-tight">{step.label}</p>
+                        <p className="text-[10px] text-fg-muted">{step.desc}</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-lg border border-line bg-bg-above/20 p-3 text-center">
+                  <p className="text-[10px] font-mono text-fg-muted uppercase">Current Pool</p>
+                  <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">{formatKES(totalPoolCents, true)}</p>
+                </div>
+                <div className="rounded-lg border border-green/20 bg-green/5 p-3 text-center">
+                  <p className="text-[10px] font-mono text-green/70 uppercase">Your Odds</p>
+                  <p className="text-[16px] font-mono font-bold text-green tabular-nums mt-0.5">{placedBet.odds.toFixed(2)}x</p>
+                </div>
+              </div>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="flex items-center gap-2 rounded-lg bg-green/5 border border-green/15 px-3 py-2"
+              >
+                <svg className="w-4 h-4 text-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-[11px] text-green/90 font-medium leading-snug">
+                  The earlier you bet, the better your position. Share this market to grow the pool!
+                </p>
+              </motion.div>
+
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                onClick={() => setShowPayoutModal(false)}
+                className="w-full h-11 rounded-xl bg-green text-white text-[14px] font-bold hover:opacity-90 transition-opacity shadow-lg shadow-green/20"
+              >
+                Got it — Let&apos;s go! 🚀
+              </motion.button>
+            </div>
           </motion.div>
-        )}
-      </AnimatePresence>
+        </motion.div>
+      )}
+    </AnimatePresence>
     </>
   );
 }

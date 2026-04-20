@@ -163,6 +163,7 @@ model User {
   auditLogs             AuditLog[]
   adminMarketsCreated   AdminMarket[]           @relation("AdminMarketCreator")
   adminMarketsResolved  AdminMarket[]           @relation("AdminMarketResolver")
+  marketComments        MarketComment[]
 }
 
 model Account {
@@ -551,6 +552,21 @@ model MarketBet {
   @@index([marketPoolId])
   @@index([status])
   @@index([placedAt])
+}
+
+/// User comment on a public prediction market.
+model MarketComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  marketId  String   // matches market.id from markets.json
+  userId    String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, createdAt(sort: Desc)])
+  @@index([userId])
 }
 
 model Sector {

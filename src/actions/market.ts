@@ -232,3 +232,104 @@ export async function getMyMarketStatsAction() {
         },
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MARKET COMMENTS
+// ──────────────────────────────────────────────────────────────────────────────
+
+export type MarketCommentData = {
+    id: string
+    body: string
+    createdAt: string
+    user: {
+        id: string
+        name: string | null
+        image: string | null
+    }
+}
+
+/**
+ * Server action: post a comment on a market.
+ */
+export async function postCommentAction(
+    marketId: string,
+    body: string
+): Promise<{ success: true; comment: MarketCommentData } | { error: string }> {
+    const session = await auth()
+    if (!session?.user?.id) {
+        return { error: "You must be logged in to comment." }
+    }
+
+    const trimmed = body.trim()
+    if (!trimmed || trimmed.length < 2) {
+        return { error: "Comment is too short." }
+    }
+    if (trimmed.length > 280) {
+        return { error: "Comment must be 280 characters or less." }
+    }
+
+    try {
+        const comment = await db.marketComment.create({
+            data: {
+                marketId,
+                userId: session.user.id,
+                body: trimmed,
+            },
+            select: {
+                id: true,
+                body: true,
+                createdAt: true,
+                user: {
+                    select: { id: true, name: true, image: true },
+                },
+            },
+        })
+
+        return {
+            success: true,
+            comment: {
+                ...comment,
+                createdAt: comment.createdAt.toISOString(),
+            },
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error"
+        console.error("[postCommentAction]", message)
+        return { error: "Failed to post comment. Please try again." }
+    }
+}
+
+/**
+ * Server action: get comments for a market (newest first, limit 50).
+ */
+export async function getCommentsAction(
+    marketId: string
+): Promise<{ success: true; comments: MarketCommentData[] } | { error: string }> {
+    try {
+        const rows = await db.marketComment.findMany({
+            where: { marketId },
+            orderBy: { createdAt: "desc" },
+            take: 50,
+            select: {
+                id: true,
+                body: true,
+                createdAt: true,
+                user: {
+                    select: { id: true, name: true, image: true },
+                },
+            },
+        })
+
+        return {
+            success: true,
+            comments: rows.map((r) => ({
+                ...r,
+                createdAt: r.createdAt.toISOString(),
+            })),
+        }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error"
+        console.error("[getCommentsAction]", message)
+        return { error: "Failed to load comments." }
+    }
+}
