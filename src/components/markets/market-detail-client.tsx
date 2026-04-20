@@ -78,6 +78,7 @@ export function MarketDetailClient({
   const [estimate, setEstimate] = useState<{ returnCents: number; profitCents: number; odds: number } | null>(null);
   const [placedBet, setPlacedBet] = useState<{ outcome: string; stakeCents: number; odds: number } | null>(null);
   const [cooldownSeconds, setCooldownSeconds] = useState<number | null>(null);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
 
   const stakeCents = Math.round((parseFloat(stakeKES) || 0) * 100);
   const isValidStake = stakeCents >= 1000; // min KES 10
@@ -156,7 +157,7 @@ export function MarketDetailClient({
         setSelectedOutcome(null);
         setStakeKES("");
         setEstimate(null);
-        showToast("success", `Bet placed at ${oddsAtPlacement.toFixed(2)}x odds! 🎉`);
+        setShowPayoutModal(true);
       } else {
         const retryAfterSeconds = typeof res.retryAfterSeconds === "number" ? res.retryAfterSeconds : 0;
         if (retryAfterSeconds > 0) {
@@ -174,6 +175,7 @@ export function MarketDetailClient({
   };
 
   return (
+    <>
     <div className="max-w-4xl space-y-6">
 
       {/* ── Toast ── */}
@@ -461,9 +463,9 @@ export function MarketDetailClient({
             </p>
           </div>
 
-          {/* Recent placed bet confirmation */}
+          {/* Recent placed bet — compact inline confirmation */}
           <AnimatePresence>
-            {placedBet && (
+            {placedBet && !showPayoutModal && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -541,5 +543,141 @@ export function MarketDetailClient({
         </p>
       </div>
     </div>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          PARI-MUTUEL REASSURANCE MODAL — appears after every successful bet
+         ═══════════════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {showPayoutModal && placedBet && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            onClick={() => setShowPayoutModal(false)}
+          >
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+
+            {/* Modal card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", damping: 22, stiffness: 280 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl border border-green/20 bg-bg shadow-2xl shadow-green/10 overflow-hidden"
+            >
+              {/* Top glow accent */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green/60 via-green to-green/60" />
+
+              <div className="p-6 space-y-5">
+
+                {/* ── Success header ── */}
+                <div className="text-center space-y-2">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", delay: 0.15, damping: 12 }}
+                    className="w-16 h-16 rounded-full bg-green/10 border-2 border-green/30 flex items-center justify-center mx-auto"
+                  >
+                    <svg className="w-8 h-8 text-green" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </motion.div>
+                  <h2 className="text-xl font-bold">Bet Locked In!</h2>
+                  <p className="text-[13px] font-mono text-fg-muted">
+                    {formatKES(placedBet.stakeCents)} on <strong className="text-fg">{placedBet.outcome}</strong> at {placedBet.odds.toFixed(2)}x
+                  </p>
+                </div>
+
+                {/* ── Pool growth visual ── */}
+                <div className="rounded-xl border border-line bg-bg-above/30 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📈</span>
+                    <p className="text-[13px] font-semibold">Your payout keeps growing</p>
+                  </div>
+                  <p className="text-[12px] text-fg-secondary leading-relaxed">
+                    Every new bet placed by others on <em>different outcomes</em> adds to the prize pool.
+                    Your share of the pool is <strong className="text-green">locked in and guaranteed</strong> — it can only go <strong className="text-green">up</strong>, never down.
+                  </p>
+
+                  {/* Visual step progression */}
+                  <div className="space-y-2 pt-1">
+                    {[
+                      { icon: "🔒", label: "Your bet is secured", desc: "Stake locked at current odds" },
+                      { icon: "👥", label: "More people bet", desc: "The total prize pool grows" },
+                      { icon: "💰", label: "Your payout increases", desc: "Winners split a bigger pot" },
+                    ].map((step, i) => (
+                      <motion.div
+                        key={step.label}
+                        initial={{ opacity: 0, x: -16 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.3 + i * 0.15 }}
+                        className="flex items-center gap-3 rounded-lg bg-bg/60 px-3 py-2"
+                      >
+                        <span className="text-base shrink-0">{step.icon}</span>
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold leading-tight">{step.label}</p>
+                          <p className="text-[10px] text-fg-muted">{step.desc}</p>
+                        </div>
+                        {i < 2 && (
+                          <svg className="w-3 h-3 text-green/50 ml-auto shrink-0 rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                          </svg>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ── Key stats row ── */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-line bg-bg-above/20 p-3 text-center">
+                    <p className="text-[10px] font-mono text-fg-muted uppercase">Current Pool</p>
+                    <p className="text-[16px] font-mono font-bold tabular-nums mt-0.5">{formatKES(totalPoolCents, true)}</p>
+                  </div>
+                  <div className="rounded-lg border border-green/20 bg-green/5 p-3 text-center">
+                    <p className="text-[10px] font-mono text-green/70 uppercase">Your Odds</p>
+                    <p className="text-[16px] font-mono font-bold text-green tabular-nums mt-0.5">{placedBet.odds.toFixed(2)}x</p>
+                  </div>
+                </div>
+
+                {/* ── Assurance badge ── */}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                  className="flex items-center gap-2 rounded-lg bg-green/5 border border-green/15 px-3 py-2"
+                >
+                  <svg className="w-4 h-4 text-green shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.746 3.746 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.745 3.745 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
+                  </svg>
+                  <p className="text-[11px] text-green/90 font-medium leading-snug">
+                    The earlier you bet, the better your position. Share this market to grow the pool!
+                  </p>
+                </motion.div>
+
+                {/* ── Dismiss ── */}
+                <motion.button
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5 }}
+                  onClick={() => setShowPayoutModal(false)}
+                  className="w-full h-11 rounded-xl bg-green text-white text-[14px] font-bold hover:opacity-90 transition-opacity shadow-lg shadow-green/20"
+                >
+                  Got it — Let&apos;s go! 🚀
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
