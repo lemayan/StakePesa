@@ -135,99 +135,122 @@ function MarketQuickView({ market, imagesMap, categoryKey, parsedCategories, isL
       <div className="p-4 sm:p-6 md:px-8 max-w-5xl mx-auto space-y-6">
         
         {/* Top Details & Predict Box */}
-        <div className="grid md:grid-cols-2 gap-8">
+        <div className="grid md:grid-cols-2 gap-6">
           <div>
-            <h3 className="text-[18px] sm:text-[20px] font-bold text-fg mb-4">
+            <h3 className="text-[17px] sm:text-[19px] font-bold text-fg mb-4 leading-snug">
               {market.q}
             </h3>
             
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {market.options.map((opt: any) => {
                  const isYes = opt.name.toLowerCase() === "yes";
                  const isNo = opt.name.toLowerCase() === "no";
                  let color = "#3b82f6";
                  if (isYes) color = "#22c55e"; 
                  if (isNo) color = "#ef4444";
-                 
                  const p = Math.round(opt.probability * 100);
 
                  return (
-                   <button key={opt.name} className="w-full flex items-center justify-between p-3 rounded-xl border border-line hover:border-line-bright bg-bg hover:bg-bg-above transition-colors group">
+                   <Link
+                     key={opt.name}
+                     href={`/dashboard/markets/${market.id}`}
+                     className="w-full flex items-center justify-between p-3 rounded-xl border border-line hover:border-line-bright bg-bg hover:bg-bg-above transition-colors group"
+                   >
                      <div className="flex items-center gap-3">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
                         <span className="text-[14px] font-medium text-fg-secondary group-hover:text-fg">{opt.name}</span>
                      </div>
-                     <div className="flex items-center gap-4">
+                     <div className="flex items-center gap-3">
                         <span className="text-[14px] font-bold" style={{ color }}>{p}%</span>
-                        <span className="text-[12px] font-mono text-fg-muted bg-bg-above px-2 py-1 rounded">{(1 / opt.probability).toFixed(2)}x</span>
+                        <span className="text-[12px] font-mono text-fg-muted bg-bg-above px-2 py-1 rounded">
+                          {(1 / opt.probability).toFixed(2)}x
+                        </span>
+                        <svg className="w-3.5 h-3.5 text-fg-muted opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
                      </div>
-                   </button>
+                   </Link>
                  )
               })}
             </div>
           </div>
           
-          {/* Betting Interface */}
-          <div className="bg-bg rounded-2xl border border-line p-5 relative overflow-hidden flex flex-col justify-between">
+          {/* Action Panel */}
+          <div className="bg-bg rounded-2xl border border-line p-5 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-4">
-                 <span className="text-[13px] font-mono text-fg-muted uppercase tracking-wide">Quick Bet</span>
-                 <span className="text-[12px] font-mono text-green font-semibold shrink-0 bg-green/10 px-2 py-0.5 rounded-full border border-green/20 flex items-center gap-1.5"><span className="w-1.5 h-1.5 bg-green animate-pulse rounded-full" /> LIVE</span>
+                 <span className="text-[13px] font-mono text-fg-muted uppercase tracking-wide">Place a Bet</span>
+                 <span className="text-[12px] font-mono text-green font-semibold shrink-0 bg-green/10 px-2 py-0.5 rounded-full border border-green/20 flex items-center gap-1.5">
+                   <span className="w-1.5 h-1.5 bg-green animate-pulse rounded-full" /> LIVE
+                 </span>
               </div>
               
+              <p className="text-[13px] text-fg-muted leading-relaxed mb-4">
+                Bet with real KES using pari-mutuel odds. Your payout grows as more people enter the pool.
+              </p>
+
               <div className="space-y-2">
-                 <label className="text-[12px] text-fg-secondary">Amount (KES)</label>
-                 <input type="number" disabled placeholder="Enter stake..." className="w-full h-11 px-4 rounded-lg bg-bg-above border border-line focus:ring-1 focus:ring-green disabled:opacity-50 font-mono text-[16px]" />
+                {market.options.slice(0, 2).map((opt: any) => {
+                  const p = Math.round(opt.probability * 100);
+                  const isYes = opt.name.toLowerCase() === "yes";
+                  return (
+                    <Link
+                      key={opt.name}
+                      href={`/dashboard/markets/${market.id}`}
+                      className={`w-full h-10 flex items-center justify-between px-4 rounded-xl font-semibold text-[13px] transition-all ${
+                        isYes
+                          ? "bg-green/10 border border-green/30 text-green hover:bg-green/20"
+                          : "bg-red/10 border border-red/30 text-red hover:bg-red/20"
+                      }`}
+                    >
+                      <span>{opt.name}</span>
+                      <span className="text-[12px] font-mono opacity-70">{p}% · {(1/opt.probability).toFixed(2)}x</span>
+                    </Link>
+                  )
+                })}
               </div>
             </div>
 
-            <div className="mt-6 mb-2">
-              <div className="flex justify-between text-[13px] text-fg-muted mb-1">
-                <span>Potential Return</span>
-                <span>--</span>
-              </div>
+            <div className="mt-5">
               <div className="w-full h-px border-t border-dashed border-line mb-4" />
-              
-              {!isLoggedIn ? (
-                 <Link href="/signup" className="w-full h-11 flex items-center justify-center rounded-lg bg-green text-white font-semibold text-[14px] hover:opacity-90 transition-opacity">
-                   Sign up to bet
-                 </Link>
-              ) : (
-                <Link href={`/dashboard/markets/${market.id}`} className="w-full h-11 flex items-center justify-center rounded-lg bg-fg text-bg font-semibold text-[14px] hover:opacity-90 transition-opacity">
-                   Go to market details
-                </Link>
+              <Link
+                href={isLoggedIn ? `/dashboard/markets/${market.id}` : "/signup"}
+                className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-green text-white font-semibold text-[14px] hover:opacity-90 transition-opacity"
+              >
+                {isLoggedIn ? (
+                  <>Full Market Chart & Bet <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg></>
+                ) : (
+                  <>Sign up to bet free</>
+                )}
+              </Link>
+              {!isLoggedIn && (
+                <p className="text-[11px] text-fg-muted text-center mt-2">
+                  Already have an account? <Link href="/login" className="text-green hover:underline">Log in</Link>
+                </p>
               )}
             </div>
-
-            {/* Overlays / Auth Gating */}
-            {!isLoggedIn && (
-              <div className="absolute inset-0 z-10 bg-bg/40 backdrop-blur-[2px] flex items-center justify-center">
-                 <div className="bg-bg shadow-xl border border-line p-4 rounded-xl text-center mx-4">
-                    <p className="text-[14px] text-fg font-medium mb-3">Join to start trading</p>
-                    <Link href="/signup" className="h-9 px-5 bg-green flex items-center text-white text-[13px] font-semibold rounded-md hover:bg-green/90 transition-colors">
-                      Claim Free Account
-                    </Link>
-                 </div>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Similar Markets */}
         {related.length > 0 && (
-          <div className="pt-6 border-t border-line">
-            <h4 className="text-[12px] font-mono uppercase tracking-wider text-fg-muted flex items-center gap-2 mb-4">
+          <div className="pt-4 border-t border-line">
+            <h4 className="text-[11px] font-mono uppercase tracking-wider text-fg-muted flex items-center gap-2 mb-3">
               Similar Markets <span className="h-px flex-1 bg-line" />
             </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {related.map((rm: any) => (
-                <div key={rm.id} className="p-3 rounded-xl border border-line hover:border-line-bright hover:bg-bg transition-colors flex flex-col gap-2 cursor-pointer">
-                  <span className="text-[13px] font-medium leading-snug line-clamp-2">{rm.q}</span>
-                  <div className="flex items-center justify-between mt-auto pt-2">
+                <Link
+                  key={rm.id}
+                  href={`/dashboard/markets/${rm.id}`}
+                  className="p-3 rounded-xl border border-line hover:border-green/30 hover:bg-bg transition-colors flex flex-col gap-2"
+                >
+                  <span className="text-[12px] font-medium leading-snug line-clamp-2">{rm.q}</span>
+                  <div className="flex items-center justify-between mt-auto pt-1">
                     <span className="text-[12px] font-mono font-bold text-green">{rm.yes}%</span>
-                    <span className="text-[11px] font-mono text-fg-muted">Vol {rm.pot}</span>
+                    <span className="text-[10px] font-mono text-fg-muted">Vol {rm.pot}</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
