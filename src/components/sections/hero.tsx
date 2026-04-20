@@ -7,24 +7,62 @@ import { AnimatedCounter } from "@/components/ui/animated-counter";
 import { CandidateAvatar } from "@/components/ui/candidate-avatar";
 import { useSearchParams } from "next/navigation";
 
-/* ── Ticker Tape Data ── */
-const tickerItems = [
-  { q: "Safaricom M-Pesa processes over KES 1T in March 2026", vol: "4,840,000", odds: "62" },
-  { q: "Kenya strikes new IMF funding deal by June 2026", vol: "9,600,000", odds: "55" },
-  { q: "USD/KES exchange rate falls below KES 128 before April", vol: "6,800,000", odds: "42" },
-  { q: "Gen Z protests return before end of Q1 2026", vol: "2,700,000", odds: "45" },
-  { q: "Kenya wins gold at 2026 Commonwealth Games", vol: "2,100,000", odds: "83" },
-  { q: "National dialogue committee formed before May 2026", vol: "2,300,000", odds: "38" },
-  { q: "CBK cuts base lending rate in April MPC meeting", vol: "3,400,000", odds: "51" },
-];
+/* ── Live Ticker Hook ── */
+type LiveTick = { label: string; value: string; change?: number }
 
-const pulseItems = [
-  { title: "Ruto 2027", change: "+2.1%", volume: "KES 1.8M" },
-  { title: "EPL Winner", change: "+1.4%", volume: "KES 2.4M" },
-  { title: "BTC ATH", change: "-0.9%", volume: "KES 1.2M" },
-  { title: "Cost of Living", change: "+0.6%", volume: "KES 980K" },
-  { title: "Harambee AFCON", change: "+1.2%", volume: "KES 760K" },
-];
+function useLiveTicker(): LiveTick[] {
+  const [ticks, setTicks] = useState<LiveTick[]>([
+    { label: "BTC", value: "Loading…" },
+    { label: "ETH", value: "Loading…" },
+    { label: "USD/KES", value: "Loading…" },
+    { label: "Nairobi", value: "Loading…" },
+  ])
+
+  useEffect(() => {
+    const update = async () => {
+      const items: LiveTick[] = []
+      try {
+        const [cryptoRes, forexRes, weatherRes] = await Promise.allSettled([
+          fetch("/api/live/crypto").then(r => r.json()),
+          fetch("/api/live/forex").then(r => r.json()),
+          fetch("/api/live/weather").then(r => r.json()),
+        ])
+
+        if (cryptoRes.status === "fulfilled" && cryptoRes.value.btc) {
+          const c = cryptoRes.value
+          items.push({ label: "₿ BTC", value: `$${c.btc.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, change: c.btc.change24h })
+          items.push({ label: "Ξ ETH", value: `$${c.eth.price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`, change: c.eth.change24h })
+          items.push({ label: "◎ SOL", value: `$${c.sol.price.toFixed(2)}`, change: c.sol.change24h })
+        }
+
+        if (forexRes.status === "fulfilled" && forexRes.value.rates) {
+          const r = forexRes.value.rates
+          items.push({ label: "USD/KES", value: `KES ${(r.KES ?? 129).toFixed(2)}` })
+          items.push({ label: "USD/EUR", value: `€${(r.EUR ?? 0.85).toFixed(4)}` })
+          items.push({ label: "USD/GBP", value: `£${(r.GBP ?? 0.74).toFixed(4)}` })
+        }
+
+        if (weatherRes.status === "fulfilled" && weatherRes.value.current) {
+          const w = weatherRes.value
+          items.push({ label: `🌡 Nairobi`, value: `${w.current.temp.toFixed(1)}°C — ${w.current.description}` })
+        }
+
+        // Always append static political market
+        items.push({ label: "🏛 2027 Elections", value: "Ruto 40% · Opp. 40%", change: -2.1 })
+        items.push({ label: "⚽ EPL Winner", value: "Arsenal 35% odds" })
+
+        setTicks(items)
+      } catch { /* silent */ }
+    }
+
+    update()
+    const id = setInterval(update, 15_000)
+    return () => clearInterval(id)
+  }, [])
+
+  return ticks
+}
+
 
 /* ── Rich Multi-Outcome Custom Markets ── */
 export type Outcome = {
@@ -193,6 +231,7 @@ interface HeroProps {
 export function Hero({ initialTrendingMarkets, siteConfig, globalStats }: HeroProps) {
   const [marketIdx, setMarketIdx] = useState(0);
   const [activeHover, setActiveHover] = useState<number | null>(null);
+  const liveTicks = useLiveTicker();
 
   const trendingMarkets = React.useMemo(() => {
     if (!initialTrendingMarkets || initialTrendingMarkets.length === 0) return [];
@@ -234,15 +273,19 @@ export function Hero({ initialTrendingMarkets, siteConfig, globalStats }: HeroPr
 
   return (
     <section className="relative">
-      {/* ── TICKER TAPE ── */}
+      {/* ── LIVE TICKER TAPE ── */}
       <div className="border-b border-line overflow-hidden h-9 sm:h-10 flex items-center bg-bg-above/60 backdrop-blur-sm">
         <div className="animate-ticker flex items-center gap-6 sm:gap-8 whitespace-nowrap text-[12px] sm:text-[14px] font-mono">
-          {[...tickerItems, ...tickerItems].map((t, i) => (
+          {[...liveTicks, ...liveTicks].map((t, i) => (
             <span key={i} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-green animate-livepulse" />
-              <span className="text-fg-secondary truncate max-w-[200px] sm:max-w-[280px]">{t.q}</span>
-              <span className="text-green font-semibold">KES {t.vol}</span>
-              <span className="text-fg-muted">{t.odds}%</span>
+              <span className="text-fg-muted font-semibold">{t.label}</span>
+              <span className="text-fg-secondary">{t.value}</span>
+              {t.change !== undefined && (
+                <span className={t.change >= 0 ? "text-green" : "text-red"}>
+                  {t.change >= 0 ? "▲" : "▼"} {Math.abs(t.change).toFixed(2)}%
+                </span>
+              )}
             </span>
           ))}
         </div>
@@ -460,11 +503,15 @@ export function Hero({ initialTrendingMarkets, siteConfig, globalStats }: HeroPr
 
           <div className="overflow-hidden">
             <div className="animate-ticker flex items-center gap-5 whitespace-nowrap text-[12px] font-mono">
-              {[...pulseItems, ...pulseItems].map((item, index) => (
-                <span key={`${item.title}-${index}`} className="flex items-center gap-2">
-                  <span className="text-fg-secondary">{item.title}</span>
-                  <span className={item.change.startsWith("-") ? "text-red" : "text-green"}>{item.change}</span>
-                  <span className="text-fg-muted">{item.volume}</span>
+              {[...liveTicks, ...liveTicks].map((item, index) => (
+                <span key={`${item.label}-${index}`} className="flex items-center gap-2">
+                  <span className="text-fg-muted font-semibold">{item.label}</span>
+                  <span className="text-fg-secondary">{item.value}</span>
+                  {item.change !== undefined && (
+                    <span className={item.change >= 0 ? "text-green" : "text-red"}>
+                      {item.change >= 0 ? "▲" : "▼"} {Math.abs(item.change).toFixed(2)}%
+                    </span>
+                  )}
                 </span>
               ))}
             </div>

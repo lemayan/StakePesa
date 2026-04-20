@@ -4,6 +4,7 @@ import { Hero } from "@/components/sections/hero"
 import { StatsBar } from "@/components/sections/stats-bar"
 import { HowItWorks } from "@/components/sections/how-it-works"
 import { LiveMarkets } from "@/components/sections/live-markets"
+import { LiveMarketsStrip } from "@/components/sections/live-markets-strip"
 import { CallToAction } from "@/components/sections/cta"
 import { Footer } from "@/components/sections/footer"
 import CookieConsent from "@/components/ui/cookie-consent"
@@ -97,6 +98,7 @@ export default async function Home() {
         <Navbar />
       </Suspense>
       <Hero initialTrendingMarkets={trendingMarkets} siteConfig={siteConfig} globalStats={globalStats} />
+      <LiveMarketsStrip />
       <StatsBar />
       <HowItWorks />
       <Suspense fallback={null}>

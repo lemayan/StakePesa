@@ -1,6 +1,7 @@
 import { getAllMarketOddsAction } from "@/actions/market";
 import { MarketsClient } from "@/components/markets/markets-client";
 import { getMarketCatalog } from "@/lib/market-catalog";
+import { LiveMarketsStrip } from "@/components/sections/live-markets-strip";
 
 export const metadata = {
   title: "Markets | StakePesa",
@@ -36,5 +37,10 @@ export default async function MarketsPage() {
     };
   });
 
-  return <MarketsClient markets={enriched} />;
+  return (
+    <>
+      <LiveMarketsStrip />
+      <MarketsClient markets={enriched} />
+    </>
+  );
 }
