@@ -50,6 +50,14 @@ export const RISK_CONFIG = {
     MAX_USER_OUTCOME_OWNERSHIP_FRACTION: 0.50,
 
     /**
+     * Minimum total pool size (KES cents) before concentration checks are enforced.
+     * Below this threshold, concentration is meaningless (the first bettor is always
+     * 100% of the pool). Seed bets are allowed freely until the pool has real liquidity.
+     * Default: KES 1,000 (100,000 cents).
+     */
+    MIN_POOL_FOR_CONCENTRATION_CHECK: 100_000, // KES 1,000
+
+    /**
      * Net liability cap per market in KES cents.
      * If paying out all winners on the most-staked outcome would exceed this,
      * the platform BLOCKS further bets on that outcome.
@@ -288,8 +296,11 @@ export function assessBetRisk(params: {
     }
 
     // ── CHECK 3: Outcome concentration ────────────────────────────────────────
+    // Skip when total pool is still in seed phase — concentration is meaningless
+    // when the first bettors haven't yet built up liquidity.
     const projectedOutcomePool = projectedPools[outcome] ?? 0
-    if (isOutcomeConcentrated(projectedOutcomePool, projectedTotalCents)) {
+    const poolIsMature = projectedTotalCents >= RISK_CONFIG.MIN_POOL_FOR_CONCENTRATION_CHECK
+    if (poolIsMature && isOutcomeConcentrated(projectedOutcomePool, projectedTotalCents)) {
         const fraction = ((projectedOutcomePool / projectedTotalCents) * 100).toFixed(1)
         flags.push({
             code: "OUTCOME_CONCENTRATION",
@@ -300,7 +311,8 @@ export function assessBetRisk(params: {
     }
 
     // ── CHECK 4: Per-user outcome ownership ───────────────────────────────────
-    if (isUserConcentrationTooHigh(userExistingStakeOnOutcome, stakeCents, projectedOutcomePool)) {
+    // Also skip during seed phase — a single user seeding a fresh market is fine.
+    if (poolIsMature && isUserConcentrationTooHigh(userExistingStakeOnOutcome, stakeCents, projectedOutcomePool)) {
         const maxAllowed = Math.trunc(projectedOutcomePool * RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION) - userExistingStakeOnOutcome
         flags.push({
             code: "USER_CONCENTRATION_TOO_HIGH",
@@ -341,21 +353,25 @@ export function assessBetRisk(params: {
     const liabilityHeadroom = RISK_CONFIG.MAX_PAYOUT_LIABILITY_CENTS - currentLiability
     maxAllowedStakeCents = Math.min(maxAllowedStakeCents, liabilityHeadroom)
 
-    // Constraint from concentration cap
-    const currentOutcomePool = currentPools[outcome] ?? 0
+    // Concentration constraints only apply once the pool is mature
     const currentTotal = calculateTotalPool(currentPools)
-    const maxOnOutcome = Math.trunc(
-        (currentTotal * RISK_CONFIG.MAX_SINGLE_OUTCOME_POOL_FRACTION - currentOutcomePool) /
-        (1 - RISK_CONFIG.MAX_SINGLE_OUTCOME_POOL_FRACTION)
-    )
-    maxAllowedStakeCents = Math.min(maxAllowedStakeCents, Math.max(0, maxOnOutcome))
+    if (currentTotal >= RISK_CONFIG.MIN_POOL_FOR_CONCENTRATION_CHECK) {
+        // Constraint from concentration cap
+        const currentOutcomePool = currentPools[outcome] ?? 0
+        const maxOnOutcome = Math.trunc(
+            (currentTotal * RISK_CONFIG.MAX_SINGLE_OUTCOME_POOL_FRACTION - currentOutcomePool) /
+            (1 - RISK_CONFIG.MAX_SINGLE_OUTCOME_POOL_FRACTION)
+        )
+        maxAllowedStakeCents = Math.min(maxAllowedStakeCents, Math.max(0, maxOnOutcome))
 
-    // Constraint from user ownership cap
-    const maxUserStake = Math.trunc(
-        (currentOutcomePool * RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION - userExistingStakeOnOutcome) /
-        (1 - RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION)
-    )
-    maxAllowedStakeCents = Math.min(maxAllowedStakeCents, Math.max(0, maxUserStake))
+        // Constraint from user ownership cap
+        const maxUserStake = Math.trunc(
+            (currentOutcomePool * RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION - userExistingStakeOnOutcome) /
+            (1 - RISK_CONFIG.MAX_USER_OUTCOME_OWNERSHIP_FRACTION)
+        )
+        maxAllowedStakeCents = Math.min(maxAllowedStakeCents, Math.max(0, maxUserStake))
+    }
+
     maxAllowedStakeCents = Math.max(0, maxAllowedStakeCents)
 
     return {
