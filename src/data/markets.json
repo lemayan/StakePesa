@@ -168,6 +168,74 @@
       ]
     },
     {
+      "category": "crypto",
+      "title": "Will Ethereum Close Above $2,500 This Week?",
+      "id": "eth_2500_week",
+      "options": [
+        {"name": "Yes", "probability": 0.52},
+        {"name": "No", "probability": 0.48}
+      ],
+      "news": [
+        {
+          "headline": "Ethereum weekly momentum under watch",
+          "summary": "Traders are closely tracking whether ETH can sustain upside toward key weekly levels.",
+          "impact": "neutral",
+          "confidence": 0.68
+        }
+      ]
+    },
+    {
+      "category": "crypto",
+      "title": "Will Solana Drop 10% This Week?",
+      "id": "sol_drop_10_week",
+      "options": [
+        {"name": "Yes", "probability": 0.35},
+        {"name": "No", "probability": 0.65}
+      ],
+      "news": [
+        {
+          "headline": "Solana volatility spikes during risk-off sessions",
+          "summary": "SOL continues to react sharply to market-wide liquidity and sentiment swings.",
+          "impact": "neutral",
+          "confidence": 0.66
+        }
+      ]
+    },
+    {
+      "category": "finance",
+      "title": "Will USD/KES Cross 130 This Month?",
+      "id": "usd_kes_130_month",
+      "options": [
+        {"name": "Yes", "probability": 0.44},
+        {"name": "No", "probability": 0.56}
+      ],
+      "news": [
+        {
+          "headline": "KES traders watch resistance near 130",
+          "summary": "FX participants are monitoring macro and liquidity signals around the 130 level.",
+          "impact": "neutral",
+          "confidence": 0.64
+        }
+      ]
+    },
+    {
+      "category": "finance",
+      "title": "Will EUR/USD Rise This Week?",
+      "id": "eurusd_up_week",
+      "options": [
+        {"name": "Yes", "probability": 0.55},
+        {"name": "No", "probability": 0.45}
+      ],
+      "news": [
+        {
+          "headline": "EUR/USD reacts to mixed macro prints",
+          "summary": "Market attention remains on inflation and rate guidance from major central banks.",
+          "impact": "neutral",
+          "confidence": 0.62
+        }
+      ]
+    },
+    {
       "category": "tech",
       "title": "Will AI Adoption Increase Globally?",
       "id": "ai_growth",
@@ -198,6 +266,40 @@
           "summary": "Climate patterns suggest increased unpredictability in rainfall and temperatures.",
           "impact": "positive_yes",
           "confidence": 0.7
+        }
+      ]
+    },
+    {
+      "category": "climate",
+      "title": "Will Nairobi Receive Over 10mm Rain This Weekend?",
+      "id": "nairobi_rain_weekend",
+      "options": [
+        {"name": "Yes", "probability": 0.50},
+        {"name": "No", "probability": 0.50}
+      ],
+      "news": [
+        {
+          "headline": "Weekend rainfall outlook remains mixed",
+          "summary": "Forecast confidence is moderate, with localized showers possible across Nairobi.",
+          "impact": "neutral",
+          "confidence": 0.61
+        }
+      ]
+    },
+    {
+      "category": "climate",
+      "title": "Will Nairobi Exceed 28°C This Week?",
+      "id": "nairobi_heat_28_week",
+      "options": [
+        {"name": "Yes", "probability": 0.58},
+        {"name": "No", "probability": 0.42}
+      ],
+      "news": [
+        {
+          "headline": "Temperature outlook points to warmer afternoon highs",
+          "summary": "Forecasts indicate elevated daytime temperatures in parts of Nairobi this week.",
+          "impact": "positive_yes",
+          "confidence": 0.63
         }
       ]
     },

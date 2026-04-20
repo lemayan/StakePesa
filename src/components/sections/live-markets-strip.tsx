@@ -33,7 +33,18 @@ type WeatherData = {
   updatedAt: number
 }
 
-type SportsFixture = { id: string; homeTeam: string; awayTeam: string; kickoff: string; venue: string | null }
+type SportsFixture = {
+  id: string
+  homeTeam: string
+  awayTeam: string
+  kickoff: string
+  venue: string | null
+  homeScore: number | null
+  awayScore: number | null
+  liveStatus: string | null
+  liveEvents: string[]
+  liveUpdatedAt: number
+}
 type SportsLeague = { league: { name: string; short: string }; fixtures: SportsFixture[] }
 type SportsData = { leagues: SportsLeague[]; updatedAt: number }
 
@@ -51,6 +62,19 @@ type LiveMarketCard = {
   noOdds: number
   icon: string
   marketId: string
+  dataUpdatedAt?: number
+  match?: {
+    homeTeam: string
+    awayTeam: string
+    kickoff: string
+    venue: string | null
+    homeScore: number | null
+    awayScore: number | null
+    liveStatus: string | null
+    liveEvents: string[]
+    liveUpdatedAt: number
+    leagueShort: string
+  }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -132,12 +156,94 @@ function Countdown({ target }: { target: Date }) {
   )
 }
 
+function formatUpdatedAgo(updatedAt: number, nowTs: number) {
+  const diff = Math.max(0, nowTs - updatedAt)
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  return `${h}h ago`
+}
+
+function isDataStale(category: LiveMarketCard["category"], updatedAt: number, nowTs: number) {
+  const age = nowTs - updatedAt
+  if (category === "crypto") return age > 60_000
+  if (category === "sports") return age > 300_000
+  if (category === "weather") return age > 3_600_000
+  if (category === "forex") return age > 86_400_000
+  return false
+}
+
+function parseMatchPhase(liveStatus: string | null, kickoff: string, nowTs: number) {
+  const normalized = (liveStatus ?? "").trim().toUpperCase()
+
+  if (normalized) {
+    if (normalized.includes("HALF") || normalized === "HT") {
+      return { label: "HT", color: "text-amber", minute: 45, inPlay: false }
+    }
+    if (normalized.includes("FINISHED") || normalized === "FT") {
+      return { label: "FT", color: "text-fg-muted", minute: 90, inPlay: false }
+    }
+    const minuteMatch = normalized.match(/(\d{1,3})/)
+    if (minuteMatch) {
+      const minute = Number.parseInt(minuteMatch[1] ?? "0", 10)
+      return { label: `LIVE ${minute}'`, color: "text-green", minute, inPlay: true }
+    }
+    if (normalized.includes("2ND")) {
+      return { label: "LIVE 2H", color: "text-green", minute: 68, inPlay: true }
+    }
+    if (normalized.includes("1ST")) {
+      return { label: "LIVE 1H", color: "text-green", minute: 23, inPlay: true }
+    }
+    if (normalized.includes("NOT STARTED")) {
+      return { label: "NS", color: "text-fg-muted", minute: 0, inPlay: false }
+    }
+  }
+
+  const target = new Date(kickoff)
+  if (Number.isNaN(target.getTime())) {
+    return { label: "KO TBD", color: "text-fg-muted", minute: 0, inPlay: false }
+  }
+
+  const diffMs = target.getTime() - nowTs
+  if (diffMs > 0) {
+    const totalMins = Math.ceil(diffMs / 60_000)
+    const h = Math.floor(totalMins / 60)
+    const m = totalMins % 60
+    return { label: `KO in ${h}h ${m}m`, color: "text-amber", minute: 0, inPlay: false }
+  }
+
+  const minsFromKickoff = Math.floor(Math.abs(diffMs) / 60_000)
+  if (minsFromKickoff <= 45) {
+    return { label: `LIVE 1H ${minsFromKickoff}'`, color: "text-green", minute: minsFromKickoff, inPlay: true }
+  }
+  if (minsFromKickoff <= 60) {
+    return { label: "HT", color: "text-amber", minute: 45, inPlay: false }
+  }
+  if (minsFromKickoff <= 105) {
+    const minute = Math.min(90, minsFromKickoff - 15)
+    return { label: `LIVE 2H ${minute}'`, color: "text-green", minute, inPlay: true }
+  }
+  return { label: "FT", color: "text-fg-muted", minute: 90, inPlay: false }
+}
+
+const LEAGUE_CHIP: Record<string, string> = {
+  EPL: "bg-green/12 text-green border-green/30",
+  UCL: "bg-blue-500/12 text-blue-300 border-blue-400/35",
+  KEN: "bg-amber/12 text-amber border-amber/35",
+}
+
 // ── Market Card ───────────────────────────────────────────────────────────────
 
-function LiveCard({ card }: { card: LiveMarketCard }) {
+function LiveCard({ card, nowTs }: { card: LiveMarketCard; nowTs: number }) {
   const router = useRouter()
   const positive = (card.liveChange ?? 0) >= 0
   const detailHref = `/dashboard/markets/${card.marketId}`
+  const stale = typeof card.dataUpdatedAt === "number" ? isDataStale(card.category, card.dataUpdatedAt, nowTs) : false
+  const updatedText = typeof card.dataUpdatedAt === "number" ? formatUpdatedAgo(card.dataUpdatedAt, nowTs) : null
+  const phase = card.match ? parseMatchPhase(card.match.liveStatus, card.match.kickoff, nowTs) : null
+  const progressPct = phase ? Math.max(0, Math.min(100, (phase.minute / 90) * 100)) : 0
 
   useEffect(() => {
     router.prefetch(detailHref)
@@ -188,24 +294,74 @@ function LiveCard({ card }: { card: LiveMarketCard }) {
             </div>
           </div>
           {/* LIVE badge */}
-          <div className="flex items-center gap-1 shrink-0 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green animate-livepulse" />
-            <span className="text-[9px] font-mono font-bold text-green uppercase tracking-widest">Live</span>
+          <div className="text-right shrink-0 mt-0.5 space-y-0.5">
+            <div className="flex items-center justify-end gap-1">
+              <span className={`w-1.5 h-1.5 rounded-full ${stale ? "bg-amber" : "bg-green animate-livepulse"}`} />
+              <span className={`text-[9px] font-mono font-bold uppercase tracking-widest ${stale ? "text-amber" : "text-green"}`}>
+                {stale ? "Stale" : "Live"}
+              </span>
+            </div>
+            {updatedText && (
+              <p className="text-[9px] font-mono text-fg-muted">Updated {updatedText}</p>
+            )}
           </div>
         </div>
 
-        {/* Live data + sparkline */}
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-[22px] font-mono font-bold tabular-nums leading-none">{card.liveValue}</p>
-            {card.liveChange !== undefined && (
-              <p className={`text-[11px] font-mono mt-1 ${positive ? "text-green" : "text-red"}`}>
-                {positive ? "▲" : "▼"} {formatChange(card.liveChange)}
-              </p>
+        {/* Live data */}
+        {card.category === "sports" && card.match ? (
+          <div className="rounded-xl border border-line bg-bg/60 p-3 space-y-2">
+            <div className="flex items-center justify-between text-[11px] font-mono">
+              <div className="flex items-center gap-1.5 min-w-0 max-w-[68%]">
+                <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold ${LEAGUE_CHIP[card.match.leagueShort] ?? "bg-bg-above text-fg-muted border-line"}`}>
+                  {card.match.leagueShort}
+                </span>
+                <span className="text-fg-secondary truncate">{card.match.venue ?? "Venue TBA"}</span>
+              </div>
+              <span className={`text-[11px] font-mono ${phase?.color ?? "text-fg-muted"}`}>{phase?.label ?? "KO TBD"}</span>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="space-y-0.5 min-w-0">
+                <div className="text-[12px] font-semibold truncate">{card.match.homeTeam}</div>
+                <div className="text-[18px] font-mono font-bold leading-none text-green tabular-nums">{card.match.homeScore ?? "-"}</div>
+              </div>
+              <div className="px-2 py-1 rounded-md border border-line bg-bg-above text-[12px] font-mono font-bold">:</div>
+              <div className="space-y-0.5 min-w-0 text-right">
+                <div className="text-[12px] font-semibold truncate">{card.match.awayTeam}</div>
+                <div className="text-[18px] font-mono font-bold leading-none text-red tabular-nums">{card.match.awayScore ?? "-"}</div>
+              </div>
+            </div>
+            <div className="h-1 rounded-full bg-bg-above overflow-hidden">
+              <motion.div
+                className="h-full bg-linear-to-r from-green/80 to-emerald-300/80"
+                animate={{ width: `${progressPct}%` }}
+                transition={{ duration: phase?.inPlay ? 0.9 : 0.35, ease: "easeOut" }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[10px] font-mono text-fg-muted">
+              <span>{phase?.inPlay ? `Minute ${phase.minute}` : "Match timeline"}</span>
+              <span>Updated {formatUpdatedAgo(card.match.liveUpdatedAt, nowTs)}</span>
+            </div>
+            {card.match.liveEvents.length > 0 && (
+              <div className="rounded-md border border-line bg-bg-above/40 px-2 py-1">
+                <p className="text-[10px] font-mono text-fg-muted truncate">
+                  Live events: {card.match.liveEvents.slice(0, 2).join(" • ")}
+                </p>
+              </div>
             )}
           </div>
-          <Sparkline values={card.sparklineValues} positive={positive} />
-        </div>
+        ) : (
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-[22px] font-mono font-bold tabular-nums leading-none">{card.liveValue}</p>
+              {card.liveChange !== undefined && (
+                <p className={`text-[11px] font-mono mt-1 ${positive ? "text-green" : "text-red"}`}>
+                  {positive ? "▲" : "▼"} {formatChange(card.liveChange)}
+                </p>
+              )}
+            </div>
+            <Sparkline values={card.sparklineValues} positive={positive} />
+          </div>
+        )}
 
         {/* Question */}
         <div className="border-t border-line/60 pt-2.5">
@@ -267,6 +423,7 @@ export function LiveMarketsStrip() {
   const [weather, setWeather] = useState<WeatherData | null>(null)
   const [sports, setSports] = useState<SportsData | null>(null)
   const [activeCat, setActiveCat] = useState<Cat>("all")
+  const [nowTs, setNowTs] = useState(Date.now())
 
   // Sparkline ringbuffers — hold last 30 price samples
   const btcHistory = useRef<number[]>([])
@@ -342,6 +499,11 @@ export function LiveMarketsStrip() {
     }
   }, [fetchCrypto, fetchForex, fetchWeather, fetchSports])
 
+  useEffect(() => {
+    const t = setInterval(() => setNowTs(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
   // Build midnight EAT resolution time for today
   const midnightEAT = (() => {
     const d = new Date()
@@ -377,6 +539,7 @@ export function LiveMarketsStrip() {
       noOdds: 62,
       icon: "₿",
       marketId: "btc_ath",
+      dataUpdatedAt: crypto.updatedAt,
     })
 
     cards.push({
@@ -392,7 +555,8 @@ export function LiveMarketsStrip() {
       yesOdds: 52,
       noOdds: 48,
       icon: "Ξ",
-      marketId: "btc_ath",
+      marketId: "eth_2500_week",
+      dataUpdatedAt: crypto.updatedAt,
     })
 
     cards.push({
@@ -408,7 +572,8 @@ export function LiveMarketsStrip() {
       yesOdds: 35,
       noOdds: 65,
       icon: "◎",
-      marketId: "btc_ath",
+      marketId: "sol_drop_10_week",
+      dataUpdatedAt: crypto.updatedAt,
     })
   }
 
@@ -427,7 +592,8 @@ export function LiveMarketsStrip() {
       yesOdds: 44,
       noOdds: 56,
       icon: "💱",
-      marketId: "interest_rates",
+      marketId: "usd_kes_130_month",
+      dataUpdatedAt: forex.updatedAt ? Date.parse(forex.updatedAt) : Date.now(),
     })
 
     cards.push({
@@ -443,7 +609,8 @@ export function LiveMarketsStrip() {
       yesOdds: 55,
       noOdds: 45,
       icon: "€",
-      marketId: "interest_rates",
+      marketId: "eurusd_up_week",
+      dataUpdatedAt: forex.updatedAt ? Date.parse(forex.updatedAt) : Date.now(),
     })
   }
 
@@ -463,7 +630,8 @@ export function LiveMarketsStrip() {
       yesOdds: weekendRain > 5 ? 60 : 35,
       noOdds: weekendRain > 5 ? 40 : 65,
       icon: "⛅",
-      marketId: "climate_kenya",
+      marketId: "nairobi_rain_weekend",
+      dataUpdatedAt: weather.updatedAt,
     })
 
     cards.push({
@@ -479,7 +647,8 @@ export function LiveMarketsStrip() {
       yesOdds: forecast.some(d => d.tempMax > 28) ? 70 : 30,
       noOdds: forecast.some(d => d.tempMax > 28) ? 30 : 70,
       icon: "🌡️",
-      marketId: "climate_kenya",
+      marketId: "nairobi_heat_28_week",
+      dataUpdatedAt: weather.updatedAt,
     })
   }
 
@@ -500,7 +669,20 @@ export function LiveMarketsStrip() {
         yesOdds: 50,
         noOdds: 50,
         icon: "⚽",
-        marketId: "epl_winner",
+        marketId: league.league.short === "EPL" ? "epl_winner" : league.league.short === "KEN" ? "harambee_afcon" : "arsenal_quadruple",
+        dataUpdatedAt: sports.updatedAt,
+        match: {
+          homeTeam: fix.homeTeam,
+          awayTeam: fix.awayTeam,
+          kickoff: fix.kickoff,
+          venue: fix.venue,
+          homeScore: fix.homeScore,
+          awayScore: fix.awayScore,
+          liveStatus: fix.liveStatus,
+          liveEvents: fix.liveEvents,
+          liveUpdatedAt: fix.liveUpdatedAt,
+          leagueShort: league.league.short,
+        },
       })
     }
   }
@@ -572,7 +754,7 @@ export function LiveMarketsStrip() {
           <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
             <AnimatePresence mode="popLayout">
               {filtered.map(card => (
-                <LiveCard key={card.id} card={card} />
+                <LiveCard key={card.id} card={card} nowTs={nowTs} />
               ))}
             </AnimatePresence>
             {filtered.length === 0 && (
